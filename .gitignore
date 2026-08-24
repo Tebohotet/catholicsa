@@ -1,0 +1,61 @@
+# Miscellaneous
+*.class
+*.log
+*.pyc
+*.swp
+.DS_Store
+.atom/
+.build/
+.buildlog/
+.history
+.svn/
+.swiftpm/
+migrate_working_dir/
+
+# IntelliJ related
+*.iml
+*.ipr
+*.iws
+.idea/
+
+# The .vscode folder contains launch configuration and tasks you configure in
+# VS Code which you may wish to be included in version control, so this line
+# is commented out by default.
+#.vscode/
+
+# Flutter/Dart/Pub related
+**/doc/api/
+**/ios/Flutter/.last_build_id
+.dart_tool/
+.flutter-plugins-dependencies
+.pub-cache/
+.pub/
+/build/
+/coverage/
+
+# Symbolication related
+app.*.symbols
+
+# Obfuscation related
+app.*.map.json
+
+# Android Studio will place build artifacts here
+/android/app/debug
+/android/app/profile
+/android/app/release
+
+# Secrets - never commit these. A real Firebase Admin SDK key was
+# committed and publicly exposed from this exact path once already
+# (caught by Google's abuse scanner) - see lib/seed/seed.js for how the
+# seed script now loads credentials from the environment instead.
+lib/seed/serviceAccountKey.json
+*serviceAccountKey*.json
+.env
+.env.*
+
+# Dependency directories - these belong in package-lock.json /
+# package.json, not in git. (Currently tracked in this repo - see the
+# one-time cleanup instructions provided alongside this file.)
+node_modules/
+functions/node_modules/
+firestore-tests/node_modules/

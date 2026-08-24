@@ -1,0 +1,690 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+
+    function isSignedIn() {
+      return request.auth != null;
+    }
+
+    function isSuperAdmin() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        (get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isSuperAdmin == true ||
+         get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isDeveloper == true);
+    }
+    // Developer sits above Super Admin - can do everything a Super Admin
+    // can (covered above, since isSuperAdmin() returns true for
+    // developers too) PLUS grant/revoke Super Admin status itself, which
+    // a Super Admin cannot do to themselves or anyone else.
+    function isDeveloper() {
+      return isSignedIn() &&
+        exists(/databases/$(database)/documents/users/$(request.auth.uid)) &&
+        get(/databases/$(database)/documents/users/$(request.auth.uid)).data.isDeveloper == true;
+    }
+
+    // Parish admins can edit any church under their parish (priests
+    // commonly serve several church buildings within one parish).
+    //
+    // The demo parish is a deliberate exception: it exists purely for
+    // training and QA, so ANY signed-in user gets full admin rights there
+    // automatically - no manual "add this trainee as an admin" step ever
+    // needed, which is the whole point as this scales to more trainees.
+    // Real parishes still require an explicit admins/{uid} doc as normal.
+    function isParishAdmin(parishId) {
+      return isSignedIn() &&
+        (parishId == 'demo-parish' ||
+         exists(/databases/$(database)/documents/parishes/$(parishId)/admins/$(request.auth.uid)));
+    }
+
+    function isPriestForParish(parishId) {
+      return isSignedIn() &&
+        (parishId == 'demo-parish' ||
+         (isParishAdmin(parishId) &&
+          get(/databases/$(database)/documents/parishes/$(parishId)/admins/$(request.auth.uid)).data.role == 'priest'));
+    }
+
+    // Deliberately not trusting a comment's own claimed containsLink/status
+    // fields - text is checked directly against a link-like pattern here,
+    // and create/update rules below require the submitted status to match
+    // what this function actually finds, not what the client says it found.
+    function textContainsLink(text) {
+      return text.matches('.*(https?://|www\\.).*');
+    }
+
+    // A verified admin for this specific parish (or a Super Admin) skips
+    // the link-moderation queue - their identity is already vetted through
+    // a separate, real process (being granted admin access at all), so
+    // gating their own links the same way as an anonymous signed-in
+    // stranger would be moderation theatre, not real protection.
+    function isTrustedCommenter(parishId) {
+      return isParishAdmin(parishId) || isSuperAdmin();
+    }
+
+    // ---------- Public reference data ----------
+    // South Africa > Province (civil) > Diocese/Archdiocese > Parish > Church.
+    // Sits above provinces - added as a genuinely new top-level entity,
+    // not restructuring the existing province-first browse/search flow
+    // to require it. countryId on a province is optional specifically so
+    // the 9 provinces that already exist keep working unchanged.
+    match /countries/{countryId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // ---------- Collection-group rules ----------
+    // A collectionGroup() query (searching a named subcollection across
+    // every parent, regardless of path) is fundamentally different from
+    // the nested match rules below - Firestore requires its own explicit
+    // wildcard rule for each one, and a regular nested match never
+    // covers it, no matter how correct that nested rule looks. None of
+    // these existed despite 8 separate collectionGroup queries already
+    // depending on them (getMyDonations, getMyOrders, getMySales,
+    // getOrdersForChurch, getMyProducts, national course/product search,
+    // and the church search index) - every one of them was silently
+    // broken until these were added.
+    match /{path=**}/donations/{donationId} {
+      allow read: if isSuperAdmin() || isParishAdmin(resource.data.parishId) ||
+        (isSignedIn() && resource.data.donorId == request.auth.uid);
+    }
+    match /{path=**}/orders/{orderId} {
+      allow read: if isSuperAdmin() || isParishAdmin(resource.data.parishId) ||
+        (isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.sellerId == request.auth.uid));
+    }
+    match /{path=**}/products/{productId} {
+      allow read: if isSuperAdmin() || resource.data.status == 'approved' ||
+        (isSignedIn() && resource.data.sellerId == request.auth.uid);
+    }
+    match /{path=**}/courses/{courseId} {
+      allow read: if isSuperAdmin() || resource.data.status == 'published';
+    }
+    match /{path=**}/churches/{churchId} {
+      allow read: if true;
+    }
+
+    match /provinces/{provinceId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /dioceses/{dioceseId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+
+      match /leadership/{doc} {
+        allow read: if true;
+        allow write: if isSuperAdmin();
+      }
+    }
+
+    // ---------- Shared liturgical data (same for every church) ----------
+    // Public domain Douay-Rheims text tied to specific daily readings -
+    // prototype scope: only the days we've actually seeded have real
+    // verse text here, everything else falls back to citation-only.
+    // Genuinely multi-translation from the start - a new translation
+    // (once licensed) is just a new document under bibleTranslations,
+    // never a schema change. Replaces the old flat biblePassages
+    // prototype, which only ever had one seeded example.
+    match /bibleTranslations/{translationCode} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+
+      // Book-level document (the one that was missing)
+      match /books/{bookCode} {
+        allow read: if true;
+        allow write: if isSuperAdmin();
+
+        // Chapters under each book
+        match /chapters/{chapterNum} {
+          allow read: if true;
+          allow write: if isSuperAdmin();
+        }
+      }
+    }
+
+    // Cross-references between passages (e.g. an OT prophecy and its NT
+    // fulfilment) - genuinely a content problem, not a code one. This is
+    // the mechanism; no actual reference pairs exist yet, same honest
+    // gap as most of the Bible content itself.
+    match /bibleCrossReferences/{refId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Hymns - real CMAA data, each doc just a title + link to the real
+    // PDF sheet music. Public read so anyone can browse; write limited
+    // to the one-time/re-runnable admin import.
+    match /hymns/{hymnId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Synced from the LitCal API - a real feast's actual name, rank, and
+    // reading citations, not just a plain date. Same trust tier as
+    // liturgicalReadings itself.
+    match /feastCalendar/{date} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /liturgicalReadings/{date} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+
+      // A wedding, funeral, or feast on this date can use different
+      // readings than the ordinary day - scopeKey is 'event_{eventId}'
+      // or 'parish_{parishId}'. The date doc above stays the fallback;
+      // this is purely additive, not a replacement for it.
+      match /scoped/{scopeKey} {
+        allow read: if true;
+        allow write: if isSuperAdmin();
+      }
+    }
+
+    // Curated saint profiles (bio, image, patronage, medals) - shared
+    // nationally, grows over time the same way readings do. Most days
+    // simply won't have an entry yet, and that's shown honestly rather
+    // than faked.
+    match /saints/{saintId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Write-once, deliberately. No update or delete rule exists for
+    // anyone at all - not Developer, not Super Admin. An audit trail
+    // that the people it audits can edit or erase isn't a real audit
+    // trail. If a logged action turns out to be wrong, the fix is a new
+    // corrective entry, never editing the old one.
+    match /auditLogs/{logId} {
+      allow read: if isSuperAdmin();
+      allow create: if isSignedIn() && request.resource.data.actorUid == request.auth.uid;
+    }
+
+    // A growing, shared list of patronage tags - "Patron of travelers"
+    // gets typed once, ever, then reused as a real option on every saint
+    // after that, rather than retyped slightly differently each time.
+    match /patronageTags/{tagId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // Store item groups (Bible, Rosary, Candle, etc.) - platform-wide,
+    // same reasoning as Saints: a universal taxonomy every parish's
+    // marketplace shares, not something each parish should have to
+    // redefine separately.
+    match /productGroups/{groupId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    match /liturgicalPrayers/{prayerId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // ---------- Parish (admin unit: priests, admins, finance toggle) ----------
+    match /parishes/{parishId} {
+      allow read: if true;
+      allow create: if isSuperAdmin();
+
+      // Only featureFlags and bankDetails are priest-gated (bank details
+      // are financial, same sensitivity tier as the finances toggle);
+      // everything else (name, slug) any parish admin can fix typos on.
+      allow update: if isSuperAdmin() || (
+        isParishAdmin(parishId) &&
+        (
+          (request.resource.data.featureFlags == resource.data.featureFlags &&
+           request.resource.data.get('bankDetails', null) == resource.data.get('bankDetails', null)) ||
+          isPriestForParish(parishId)
+        )
+      );
+      // No delete for a regular parish admin, ever - deleting a parish
+      // means every church, course, product, and comment nested under
+      // it becomes orphaned data (Firestore doesn't cascade-delete
+      // subcollections). Same trust tier as create, deliberately.
+      allow delete: if isSuperAdmin();
+
+      match /admins/{uid} {
+        allow read: if true; // needed to render the "verified" tick publicly
+        allow write: if isSuperAdmin();
+      }
+
+      // Payment gateway credentials live here specifically because the
+      // parent /parishes/{parishId} document is publicly readable (the
+      // whole app reads it constantly just for name/contact info) -
+      // secrets can never sit on that document. This subcollection is the
+      // only place in the whole schema that a parish admin's own data is
+      // NOT publicly visible, deliberately.
+      match /private/{docId} {
+        allow read, write: if isSuperAdmin() || isPriestForParish(parishId);
+      }
+
+      match /priests/{priestId} {
+        allow read: if true;
+        allow write: if isSuperAdmin() || isParishAdmin(parishId);
+      }
+
+      // Policy documents (e.g. safeguarding) apply parish-wide, not per-church.
+      match /policies/{docId} {
+        allow read: if true;
+        allow write: if isSuperAdmin() || isParishAdmin(parishId);
+      }
+
+      // Parish-wide default associations - a church uses these if it
+      // hasn't defined its own more specific list.
+      match /associations/{docId} {
+        allow read: if true;
+        allow write: if isSuperAdmin() || isParishAdmin(parishId);
+      }
+
+      // ---------- Church (the physical building — map pin) ----------
+      match /churches/{churchId} {
+        allow read: if true;
+        allow create: if isSuperAdmin() || isParishAdmin(parishId);
+        // Verification status specifically requires a priest (or Super
+        // Admin) - a secretary can edit every other field on a church
+        // (name, address, accessibility, amenities), but can't be the
+        // one to certify it as verified. Same "priest confirms, not a
+        // checkbox anyone can tick" reasoning already used for course
+        // publishing.
+        allow update: if isSuperAdmin() ||
+          (isParishAdmin(parishId) &&
+           (!request.resource.data.diff(resource.data).affectedKeys().hasAny(['verificationStatus', 'verifiedAt', 'verifiedBy']) ||
+            isPriestForParish(parishId)));
+        allow delete: if isSuperAdmin() || isParishAdmin(parishId);
+
+        match /services/{docId} {
+          allow read: if true;
+          allow write: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        match /confessionTimes/{docId} {
+          allow read: if true;
+          allow write: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        match /devotions/{docId} {
+          allow read: if true;
+          allow write: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        match /notices/{docId} {
+          allow read: if true;
+          allow write: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        // Anyone can flag something wrong; only the parish's own admins
+        // (or superAdmin) can ever see the list of reports.
+        match /reports/{docId} {
+          allow create: if true;
+          allow read, update, delete: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        match /events/{docId} {
+          allow read: if true;
+          allow write: if isSuperAdmin() || isParishAdmin(parishId);
+
+          // Own RSVP only - a person can create/read/delete their own,
+          // an admin can read everyone's (needed to actually see who has
+          // an accessibility need and plan for it, not just a headcount).
+          match /attendees/{uid} {
+            allow read: if isSuperAdmin() || isParishAdmin(parishId) || (isSignedIn() && request.auth.uid == uid);
+            allow create, delete: if isSignedIn() && request.auth.uid == uid;
+          }
+        }
+
+        // A course is only publicly readable once published - drafts and
+        // pending-review courses are only visible to the parish that owns
+        // them, so half-finished material never leaks to students.
+        match /courses/{courseId} {
+          allow read: if resource.data.status == 'published' || isSuperAdmin() || isParishAdmin(parishId);
+          allow create: if isSuperAdmin() || isParishAdmin(parishId);
+          // Any parish admin can edit a course and submit it for review
+          // (draft -> pendingReview). Only a priest can move it AWAY from
+          // pendingReview - approving to published, or sending it back to
+          // draft. The UI already restricts those two buttons to priests;
+          // this is what actually enforces it, since the UI alone doesn't
+          // stop a direct Firestore write from a secretary's own account.
+          allow update: if isSuperAdmin() ||
+            (isParishAdmin(parishId) &&
+             (resource.data.status != 'pendingReview' ||
+              request.resource.data.status == resource.data.status ||
+              isPriestForParish(parishId)));
+          allow delete: if isSuperAdmin() || isParishAdmin(parishId);
+
+          match /lessons/{lessonId} {
+            allow read: if isSuperAdmin() || isParishAdmin(parishId) ||
+              get(/databases/$(database)/documents/parishes/$(parishId)/churches/$(churchId)/courses/$(courseId)).data.status == 'published';
+            allow write: if isSuperAdmin() || isParishAdmin(parishId);
+
+            // Split into two docs deliberately - if correct answers lived
+            // in the same doc as the questions, any student could read
+            // them directly via the SDK before ever attempting the quiz,
+            // making the whole "gate completion" idea security theater.
+            // 'public' = questions/options, no answers, readable by
+            // anyone who can read the lesson itself. 'answerKey' = the
+            // actual correct answers, admin-only - the grading Cloud
+            // Function reads it via Admin SDK, which bypasses these rules
+            // entirely, so a student never sees it through any path.
+            match /quiz/{docId} {
+              allow read: if docId == 'public' && (isSuperAdmin() || isParishAdmin(parishId) ||
+                get(/databases/$(database)/documents/parishes/$(parishId)/churches/$(churchId)/courses/$(courseId)).data.status == 'published');
+              allow read: if docId == 'answerKey' && (isSuperAdmin() || isParishAdmin(parishId));
+              allow write: if isSuperAdmin() || isParishAdmin(parishId);
+            }
+
+            // A student can submit their raw answers, but can never write
+            // score/passed/gradedAt themselves - those fields only ever
+            // come from the grading Cloud Function via Admin SDK. This is
+            // what actually stops a student self-reporting a passing
+            // grade to unlock a lesson they never really passed.
+            match /quizAttempts/{uid} {
+              allow read: if isSignedIn() && request.auth.uid == uid;
+              allow read: if isSuperAdmin() || isParishAdmin(parishId);
+              allow create: if isSignedIn() && request.auth.uid == uid &&
+                request.resource.data.studentId == request.auth.uid &&
+                !request.resource.data.keys().hasAny(['score', 'passed', 'gradedAt']);
+              allow update: if isSignedIn() && request.auth.uid == uid &&
+                !request.resource.data.diff(resource.data).affectedKeys().hasAny(['score', 'passed', 'gradedAt']);
+            }
+          }
+
+          match /enrollments/{uid} {
+            allow read, write: if isSignedIn() && request.auth.uid == uid;
+            allow read: if isSuperAdmin() || isParishAdmin(parishId);
+          }
+
+          // One review per student (doc id == their own uid), publicly
+          // readable so "top rated" sorting means something to anyone
+          // browsing, not just enrolled students.
+          match /reviews/{reviewId} {
+            allow read: if true;
+            // Enrollment is checked here, not just in the Dart service -
+            // a direct Firestore write from a modified client would
+            // otherwise bypass the app-layer enrollment check entirely.
+            allow create, update: if isSignedIn() && request.auth.uid == reviewId &&
+              request.resource.data.reviewerId == request.auth.uid &&
+              exists(/databases/$(database)/documents/parishes/$(parishId)/churches/$(churchId)/courses/$(courseId)/enrollments/$(request.auth.uid));
+            allow delete: if isSuperAdmin() || isParishAdmin(parishId) ||
+              (isSignedIn() && request.auth.uid == reviewId);
+          }
+        }
+
+        match /associations/{docId} {
+          allow read: if true;
+          allow write: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        match /songs/{docId} {
+          allow read: if true;
+          allow write: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        match /prayers/{docId} {
+          allow read: if true;
+          allow write: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        // Media requires approval: any parish admin can upload (pending),
+        // only superAdmin or the parish priest can approve/reject.
+        match /media/{mediaId} {
+          allow read: if true;
+          allow create: if isSuperAdmin() || isParishAdmin(parishId);
+          allow update: if isSuperAdmin() || isPriestForParish(parishId) ||
+            (isParishAdmin(parishId) && request.resource.data.status == resource.data.status);
+          allow delete: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        // Fundraisers only meaningful if the parish has finances turned on;
+        // enforced in the app UI, but writes still need admin rights here.
+        match /fundraisers/{docId} {
+          allow read: if true;
+          allow write: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        match /budget/{year} {
+          allow read: if true;
+          allow write: if isSuperAdmin() || isPriestForParish(parishId);
+        }
+
+        match /comments/{commentId} {
+          // A hidden comment, or one still pendingModeration because it
+          // contains a link nobody's reviewed yet, is invisible to the
+          // public - the point of either would be defeated if this only
+          // happened client-side.
+          allow read: if (resource.data.hidden != true && resource.data.status != 'pendingModeration') ||
+            (isSignedIn() && (resource.data.userId == request.auth.uid || isParishAdmin(parishId) || isSuperAdmin()));
+          allow create: if isSignedIn() &&
+            request.resource.data.userId == request.auth.uid &&
+            request.resource.data.hidden == false &&
+            request.resource.data.likeCount == 0 &&
+            request.resource.data.status == (
+              (textContainsLink(request.resource.data.text) && !isTrustedCommenter(parishId)) ? 'pendingModeration' : 'visible'
+            );
+          // Narrow on purpose - only an admin can touch hidden/
+          // hiddenReason/status, and nothing else. There's no "edit my
+          // own comment" feature, so this isn't opened up to the author
+          // at all - only delete is.
+          allow update: if isSuperAdmin() ||
+            (isParishAdmin(parishId) &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['hidden', 'hiddenReason', 'status']));
+          allow delete: if isSignedIn() &&
+            (resource.data.userId == request.auth.uid || isParishAdmin(parishId) || isSuperAdmin());
+
+          // Likes: a subcollection, not a field, so a single doc answers
+          // "has this uid already liked this" and avoids array contention.
+          // likeCount on the parent is never client-writable (see the
+          // create/update rules above) - only the matching Cloud Function
+          // trigger updates it, via Admin SDK, keeping it authoritative.
+          match /likes/{uid} {
+            allow read: if true;
+            allow create, delete: if isSignedIn() && request.auth.uid == uid;
+          }
+        }
+
+        // Confession booking request: contains a name and contact details,
+        // so it's treated as personal data - anyone can submit one, but
+        // only this parish's admins (or superAdmin) can ever read the list.
+        match /confessionBookingRequests/{docId} {
+          allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+          allow read, update, delete: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        match /massIntentionRequests/{docId} {
+          allow create: if isSignedIn() && request.resource.data.userId == request.auth.uid;
+          allow read, update, delete: if isSuperAdmin() || isParishAdmin(parishId);
+        }
+
+        // Donations - same manual bank-deposit + proof-of-payment shape as
+        // a marketplace order, but no product/quantity/coupon since it's
+        // not tied to a specific item. Three possible admin outcomes
+        // instead of two: approved (received, thank you), wrong_bank (tell
+        // the donor to reverse it with their bank), or rejected.
+        match /donations/{donationId} {
+          allow read: if isSuperAdmin() || isParishAdmin(parishId) ||
+            (isSignedIn() && resource.data.donorId == request.auth.uid);
+          // A donor can only ever attach proof of payment - nothing else
+          // on their own donation is theirs to change (this used to allow
+          // any field, including status, which would have let a donor
+          // mark their own donation "approved" without ever paying).
+          allow update: if isSuperAdmin() || isParishAdmin(parishId) ||
+            (isSignedIn() && resource.data.donorId == request.auth.uid &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(['proofOfPaymentUrl', 'proofOfPaymentType', 'status']) &&
+             request.resource.data.status == 'proof_submitted');
+          allow create: if isSignedIn() && request.resource.data.donorId == request.auth.uid;
+        }
+
+        // Phase 1 marketplace: listings only, no payment collection here.
+        // Pending listings are only visible to their seller and admins -
+        // approved ones are public. A seller can also edit/delete their
+        // own listing (e.g. mark it taken down once sold) without needing
+        // admin involvement for that specific case.
+        match /products/{docId} {
+          allow read: if resource.data.status == 'approved' || isSuperAdmin() || isParishAdmin(parishId) ||
+            (isSignedIn() && resource.data.sellerId == request.auth.uid);
+          allow create: if isSignedIn() && request.resource.data.sellerId == request.auth.uid;
+          // Narrow on purpose for a seller editing their own listing -
+          // content fields only, never status. Without this, a seller
+          // could write status: 'approved' directly and self-approve
+          // their own listing, bypassing admin review entirely - the
+          // exact bug class already found and fixed once this session
+          // for course publishing.
+          allow update: if isSuperAdmin() || isParishAdmin(parishId) ||
+            (isSignedIn() && resource.data.sellerId == request.auth.uid &&
+             request.resource.data.diff(resource.data).affectedKeys().hasOnly(
+               ['title', 'description', 'price', 'imageUrl', 'fulfillmentMethod', 'refundPercent', 'groupId']
+             ));
+          allow delete: if isSuperAdmin() || isParishAdmin(parishId) ||
+            (isSignedIn() && resource.data.sellerId == request.auth.uid);
+
+          // A manual-payment order (bank deposit, proof-of-payment upload)
+          // ahead of real online checkout integration. Buyer can read and
+          // update their own order (e.g. to attach proof after paying);
+          // approving/rejecting it is admin-only.
+          match /orders/{orderId} {
+            allow read: if isSuperAdmin() || isParishAdmin(parishId) ||
+              (isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.sellerId == request.auth.uid));
+            // Same fix as donations: a buyer can only ever (a) attach
+            // proof of payment, or (b) request a refund - never rewrite
+            // status/amounts/fulfillment on their own order directly.
+            // A seller (verified against the real product's sellerId at
+            // create time below, so it can't be faked) can only ever post
+            // fulfillment tracking updates - same narrow-fields approach.
+            allow update: if isSuperAdmin() || isParishAdmin(parishId) ||
+              (isSignedIn() && resource.data.buyerId == request.auth.uid &&
+               (
+                 (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['proofOfPaymentUrl', 'proofOfPaymentType', 'status']) &&
+                  request.resource.data.status == 'proof_submitted') ||
+                 // refundAmount is included here deliberately, not just
+                 // permitted - it's verified against the order's own
+                 // immutable finalAmount/refundPercent (set at creation,
+                 // never buyer-writable) so a buyer can't request a
+                 // refund for more than they're actually entitled to.
+                 // This was a real bug: refundAmount used to be written
+                 // by the client but wasn't in this allowlist at all,
+                 // meaning every real refund request was silently
+                 // rejected by this rule before the fix.
+                 (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['refundStatus', 'refundReason', 'refundRequestedAt', 'refundAmount']) &&
+                  request.resource.data.refundStatus == 'requested' &&
+                  request.resource.data.refundAmount == resource.data.finalAmount * (resource.data.refundPercent / 100.0))
+               )) ||
+              (isSignedIn() && resource.data.sellerId == request.auth.uid &&
+               request.resource.data.diff(resource.data).affectedKeys().hasOnly(['fulfillmentUpdates', 'fulfillmentStatus']));
+            allow create: if isSignedIn() && request.resource.data.buyerId == request.auth.uid &&
+              request.resource.data.sellerId ==
+                get(/databases/$(database)/documents/parishes/$(parishId)/churches/$(churchId)/products/$(docId)).data.sellerId;
+          }
+        }
+      }
+
+      // Parish-wide coupons (priest-created) OR product-scoped coupons
+      // (seller-created, only for their own listing - verified by looking
+      // up that product's sellerId at creation time). Public read so any
+      // buyer can validate a code.
+      match /coupons/{couponId} {
+        allow read: if true;
+        allow create: if isSuperAdmin() || isPriestForParish(parishId) ||
+          (isSignedIn() && request.resource.data.scope == 'product' &&
+           get(/databases/$(database)/documents/parishes/$(parishId)/churches/$(request.resource.data.churchId)/products/$(request.resource.data.productId)).data.sellerId == request.auth.uid);
+        allow update, delete: if isSuperAdmin() || isPriestForParish(parishId) ||
+          (isSignedIn() && resource.data.scope == 'product' && resource.data.createdBy == request.auth.uid);
+      }
+    }
+
+    // ---------- Platform-wide config (marketplace fee, etc.) ----------
+    match /platformConfig/{docId} {
+      allow read: if true; // needed client-side to calculate the fee at checkout, and to decide what feature flags show
+      allow write: if isSuperAdmin();
+    }
+
+    // Catechist applications - the concrete apply/approve/escalate
+    // example. Parish-level: that parish's priest can read and decide.
+    // National-level: only Super Admin (Developer included, since
+    // isSuperAdmin() covers both) can decide - a bigger claim needs a
+    // bigger authority than one priest.
+    match /catechistApplications/{appId} {
+      allow read: if isSuperAdmin() ||
+        (isSignedIn() && resource.data.applicantId == request.auth.uid) ||
+        (isSignedIn() && resource.data.level == 'parish' && isPriestForParish(resource.data.parishId));
+      allow create: if isSignedIn() && request.resource.data.applicantId == request.auth.uid;
+      allow update: if isSuperAdmin() ||
+        (isSignedIn() && resource.data.level == 'parish' && isPriestForParish(resource.data.parishId));
+    }
+
+    // ---------- Users ----------
+    match /users/{uid} {
+      allow read: if true;
+      allow create: if isSignedIn() && request.auth.uid == uid;
+      allow update: if isSignedIn() && request.auth.uid == uid &&
+        request.resource.data.isSuperAdmin == resource.data.isSuperAdmin &&
+        request.resource.data.get('isDeveloper', false) == resource.data.get('isDeveloper', false) &&
+        request.resource.data.get('isDesigner', false) == resource.data.get('isDesigner', false) &&
+        request.resource.data.get('isAuditor', false) == resource.data.get('isAuditor', false);
+      // Only a real developer can grant/revoke isDeveloper on anyone -
+      // this is deliberately narrower than isSuperAdmin() (which now also
+      // returns true for developers, correctly, but would otherwise let a
+      // plain super admin promote someone to developer too, which breaks
+      // the hierarchy this was designed around). isDesigner/isAuditor are
+      // deliberately lower-stakes - they only affect visibility into
+      // draft/test content, not platform control - so a plain Super
+      // Admin can grant/revoke those freely, same as any other field.
+      allow write: if isDeveloper() ||
+        (isSuperAdmin() && request.resource.data.get('isDeveloper', false) == resource.data.get('isDeveloper', false));
+
+      // Personal data - owner only, never public, not even to other users.
+      match /favouriteChurches/{churchId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+      match /bibleBookmarks/{bookmarkId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+      match /attendanceHistory/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+      match /readingNotes/{date} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+      match /addresses/{docId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+      match /notes/{noteId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+      // Written by Cloud Functions (Admin SDK, bypasses this rule) when a
+      // broadcast has channels.popup true - the client reads its own
+      // queue on next launch and marks each one dismissed.
+      match /pendingPopups/{popupId} {
+        allow read, write: if isSignedIn() && request.auth.uid == uid;
+      }
+    }
+
+    // Server-driven UI: a page is just data (title + ordered block list),
+    // rendered by looking up each block's type in a fixed registry that
+    // lives in code. Public read (any user can be sent to a published
+    // page), write restricted to whoever's trusted to define what shows
+    // up - same trust tier as dev flags, since a bad page definition
+    // shouldn't be something a regular parish admin can create.
+    match /customPages/{pageId} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // ---------- Shop ----------
+    match /shop/{document=**} {
+      allow read: if true;
+      allow write: if isSuperAdmin();
+    }
+
+    // ---------- Broadcasts (unified notice/reminder/welcome system) ----------
+    // Audience is never stored here or anywhere - every send resolves who
+    // to notify live, at send time, from the scope (enrolled-in-course,
+    // favourited-this-church, etc). Clients never write these directly;
+    // Cloud Functions create and update them via Admin SDK, which
+    // bypasses these rules entirely. Read access is admin-only - this is
+    // an internal queue, not something a user browses.
+    match /broadcasts/{broadcastId} {
+      allow read: if isSuperAdmin();
+      allow write: if isSuperAdmin();
+    }
+  }
+}

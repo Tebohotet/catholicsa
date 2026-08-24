@@ -1,0 +1,1091 @@
+{
+  "provinces": [
+    {
+      "id": "western-cape",
+      "name": "Western Cape",
+      "bounds": {
+        "minLat": -34.85,
+        "maxLat": -30.0,
+        "minLng": 17.4,
+        "maxLng": 24.0
+      }
+    },
+    {
+      "id": "gauteng",
+      "name": "Gauteng",
+      "bounds": {
+        "minLat": -26.9,
+        "maxLat": -25.2,
+        "minLng": 27.5,
+        "maxLng": 29.0
+      }
+    },
+    {
+      "id": "kwazulu-natal",
+      "name": "KwaZulu-Natal",
+      "bounds": {
+        "minLat": -31.1,
+        "maxLat": -26.8,
+        "minLng": 28.8,
+        "maxLng": 32.9
+      }
+    },
+    {
+      "id": "eastern-cape",
+      "name": "Eastern Cape",
+      "bounds": {
+        "minLat": -34.2,
+        "maxLat": -30.0,
+        "minLng": 22.5,
+        "maxLng": 30.2
+      }
+    },
+    {
+      "id": "free-state",
+      "name": "Free State",
+      "bounds": {
+        "minLat": -30.7,
+        "maxLat": -26.5,
+        "minLng": 24.3,
+        "maxLng": 29.8
+      }
+    },
+    {
+      "id": "limpopo",
+      "name": "Limpopo",
+      "bounds": {
+        "minLat": -25.5,
+        "maxLat": -22.1,
+        "minLng": 26.4,
+        "maxLng": 31.9
+      }
+    },
+    {
+      "id": "mpumalanga",
+      "name": "Mpumalanga",
+      "bounds": {
+        "minLat": -27.5,
+        "maxLat": -24.1,
+        "minLng": 28.9,
+        "maxLng": 32.1
+      }
+    },
+    {
+      "id": "northern-cape",
+      "name": "Northern Cape",
+      "bounds": {
+        "minLat": -32.5,
+        "maxLat": -24.5,
+        "minLng": 16.4,
+        "maxLng": 25.5
+      }
+    },
+    {
+      "id": "north-west",
+      "name": "North West",
+      "bounds": {
+        "minLat": -28.1,
+        "maxLat": -24.5,
+        "minLng": 22.5,
+        "maxLng": 28.5
+      }
+    }
+  ],
+  "dioceses": [
+    {
+      "id": "adct",
+      "provinceId": "western-cape",
+      "name": "Archdiocese of Cape Town",
+      "type": "Archdiocese",
+      "address": "Cathedral Place, 12 Bouquet Street, Cape Town 8001",
+      "phone": "021 462 2417",
+      "website": "adct.org.za",
+      "bishopTitle": "Archbishop",
+      "bishopName": "Stephen Brislin",
+      "auxiliaryBishop": "Bishop Sylvester David OMI",
+      "cathedralName": "St Mary of the Flight into Egypt (St Mary's Cathedral)",
+      "verified": false,
+      "hasData": true
+    },
+    {
+      "id": "johannesburg",
+      "provinceId": "gauteng",
+      "name": "Archdiocese of Johannesburg",
+      "type": "Archdiocese",
+      "address": "186 Nugget Street, Berea / Private Bag X10, Doornfontein 2028",
+      "phone": "011 402 6400",
+      "website": "catholicjhb.org.za",
+      "bishopTitle": "Archbishop",
+      "bishopName": "Buti Tlhagale OMI",
+      "vicarGeneral": "Fr Paul Beukes OMI",
+      "chancellor": "Fr Jean-Marie Kuzituka Did'Ho",
+      "cathedralName": "Christ the King",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "pretoria",
+      "provinceId": "gauteng",
+      "name": "Archdiocese of Pretoria",
+      "type": "Archdiocese",
+      "address": "Jolivet House, 140 Visagie Street / PO Box 8149, Pretoria 0001",
+      "phone": "012 326 5311",
+      "email": "info@ptadiocese.org.za",
+      "bishopTitle": "Archbishop",
+      "bishopName": "Dabula Anthony Mpako",
+      "auxiliaryBishop": "Bishop Masilo John Selemela",
+      "cathedralName": "Sacred Heart Cathedral, 395 Bosman Street",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "durban",
+      "provinceId": "kwazulu-natal",
+      "name": "Archdiocese of Durban",
+      "type": "Archdiocese",
+      "address": "154 Gordon Road, Morningside / PO Box 47489, Greyville 4023",
+      "phone": "031 303 1417",
+      "email": "chancery@aod.org.za",
+      "website": "catholic-dbn.org.za",
+      "bishopTitle": "Archbishop",
+      "bishopName": "Siegfried Mandla Jwara CMM",
+      "auxiliaryBishop": "Bishop Elias Kwenzakufani Zondi",
+      "cathedralName": "Emmanuel Cathedral",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "mariannhill",
+      "provinceId": "kwazulu-natal",
+      "name": "Diocese of Mariannhill",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Mlungisi Pius Dlungwane",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "eshowe",
+      "provinceId": "kwazulu-natal",
+      "name": "Diocese of Eshowe",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Xolelo Thaddaeus Kumalo",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "dundee",
+      "provinceId": "kwazulu-natal",
+      "name": "Diocese of Dundee",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Thomas Graham Rose",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "kokstad",
+      "provinceId": "kwazulu-natal",
+      "name": "Diocese of Kokstad",
+      "type": "Diocese",
+      "bishopName": null,
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "umzimkulu",
+      "provinceId": "kwazulu-natal",
+      "name": "Diocese of Umzimkulu",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Stanislaw Jan Dziuba OSPPE",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "ingwavuma",
+      "provinceId": "kwazulu-natal",
+      "name": "Apostolic Vicariate of Ingwavuma",
+      "type": "Apostolic Vicariate",
+      "bishopName": null,
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "port-elizabeth",
+      "provinceId": "eastern-cape",
+      "name": "Diocese of Port Elizabeth",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Vincent Mduduzi Zungu",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "queenstown",
+      "provinceId": "eastern-cape",
+      "name": "Diocese of Queenstown",
+      "type": "Diocese",
+      "bishopName": null,
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "aliwal",
+      "provinceId": "eastern-cape",
+      "name": "Diocese of Aliwal",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Joseph Mary Kizito",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "mthatha",
+      "provinceId": "eastern-cape",
+      "name": "Diocese of Mthatha",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Sithembele Anthony Sipuka",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "bloemfontein",
+      "provinceId": "free-state",
+      "name": "Archdiocese of Bloemfontein",
+      "type": "Archdiocese",
+      "address": "7A Whites Road / PO Box 362, Bloemfontein 9300",
+      "phone": "051 448 1658",
+      "email": "archbishop@archbfn.co.za",
+      "bishopTitle": "Archbishop",
+      "bishopName": "Zolile Peter Mpambani SCJ",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "bethlehem",
+      "provinceId": "free-state",
+      "name": "Diocese of Bethlehem",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Jan de Groef M.Afr",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "kroonstad",
+      "provinceId": "free-state",
+      "name": "Diocese of Kroonstad",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Peter Holiday",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "polokwane",
+      "provinceId": "limpopo",
+      "name": "Diocese of Polokwane",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Jeremiah Madimetja Masela",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "tzaneen",
+      "provinceId": "limpopo",
+      "name": "Diocese of Tzaneen",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "João Rodrigues",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "witbank",
+      "provinceId": "mpumalanga",
+      "name": "Diocese of Witbank",
+      "type": "Diocese",
+      "bishopName": null,
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "kimberley",
+      "provinceId": "northern-cape",
+      "name": "Diocese of Kimberley",
+      "type": "Diocese",
+      "bishopName": null,
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "keimoes-upington",
+      "provinceId": "northern-cape",
+      "name": "Diocese of Keimoes–Upington",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Edward Risi OMI",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "de-aar",
+      "provinceId": "northern-cape",
+      "name": "Diocese of De Aar",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Adam Musialek SCJ",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "rustenburg",
+      "provinceId": "north-west",
+      "name": "Diocese of Rustenburg",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Kevin Dowling CSsR",
+      "verified": false,
+      "hasData": false
+    },
+    {
+      "id": "klerksdorp",
+      "provinceId": "north-west",
+      "name": "Diocese of Klerksdorp",
+      "type": "Diocese",
+      "bishopTitle": "Bishop",
+      "bishopName": "Victor Phalana",
+      "verified": false,
+      "hasData": false
+    }
+  ],
+  "parishes": [
+    {
+      "id": "st-jude-parish",
+      "dioceseId": "adct",
+      "name": "St Jude Parish",
+      "featureFlags": {
+        "finances": false,
+        "shop": false,
+        "comments": true,
+        "associations": true
+      },
+      "contactPhone": "022 713 1644",
+      "contactEmail": "stjudecatholicchurch@gmail.com",
+      "socialLinks": {
+        "facebook": "https://www.facebook.com/share/1EAzN5Tdym/?mibextid=wwXIfr",
+        "whatsapp": "https://wa.me/27227131644",
+        "_whatsappNote": "Click-to-chat link to the parish office number, NOT a group invite - a group invite would expose every member's phone number to anyone who joins. Replace with a real WhatsApp Channel link if the parish sets one up instead."
+      },
+      "priests": [
+        {
+          "name": "Fr Jan Mostert OSFS",
+          "role": "Parish Priest",
+          "phone": "022 713 1644"
+        }
+      ]
+    },
+    {
+      "id": "demo-parish",
+      "dioceseId": "adct",
+      "name": "⚡ DEMO PARISH (Training Sandbox — safe to edit)",
+      "featureFlags": {
+        "finances": true,
+        "shop": false,
+        "comments": true,
+        "associations": true
+      },
+      "contactPhone": "000 000 0000",
+      "contactEmail": "demo@catholicsa.co.za",
+      "socialLinks": {}
+    }
+  ],
+  "churches": [
+    {
+      "id": "vredenburg",
+      "parishId": "st-jude-parish",
+      "name": "St Jude Catholic Church",
+      "place": "Vredenburg",
+      "address": "49 Long Street, Vredenburg, 7380",
+      "phone": "022 713 1644",
+      "email": "stjudecatholicchurch@gmail.com",
+      "lat": -32.9067,
+      "lng": 17.9932,
+      "fullProfile": true,
+      "socialLinks": {
+        "facebook": "https://www.facebook.com/share/1EAzN5Tdym/?mibextid=wwXIfr"
+      }
+    },
+    {
+      "id": "laaiplek",
+      "parishId": "st-jude-parish",
+      "name": "St Helena",
+      "place": "Laaiplek",
+      "address": "Cnr Stephan & River Streets, Laaiplek",
+      "lat": -32.75,
+      "lng": 18.1833,
+      "fullProfile": false
+    },
+    {
+      "id": "laingville",
+      "parishId": "st-jude-parish",
+      "name": "St Peter the Fisherman",
+      "place": "Laingville",
+      "address": "50 Main Road, Laingville",
+      "lat": -32.7667,
+      "lng": 18.15,
+      "fullProfile": false
+    },
+    {
+      "id": "langebaan",
+      "parishId": "st-jude-parish",
+      "name": "Star of the Sea",
+      "place": "Langebaan",
+      "address": "Suffren Street, Langebaan",
+      "lat": -33.093,
+      "lng": 18.0203,
+      "fullProfile": false
+    },
+    {
+      "id": "saldanha",
+      "parishId": "st-jude-parish",
+      "name": "Mother of Mercy",
+      "place": "Saldanha",
+      "address": "56 Church Street, Saldanha",
+      "lat": -33.0117,
+      "lng": 17.9442,
+      "fullProfile": false
+    },
+    {
+      "id": "holy-cross-convent",
+      "parishId": "st-jude-parish",
+      "name": "Holy Cross Convent",
+      "place": "Louwville",
+      "address": "Cnr Anemone & Aalwyn Streets, Louwville",
+      "lat": -32.910881598181106,
+      "lng": 18.01354206008964,
+      "fullProfile": false,
+      "buildingType": "Convent",
+      "note": "Occasional Mass location - schedule to be confirmed with parish office."
+    },
+    {
+      "id": "demo-church",
+      "parishId": "demo-parish",
+      "name": "Demo Church",
+      "slug": "demo-church",
+      "address": "123 Practice Street, Training Town",
+      "lat": -33.9,
+      "lng": 18.4,
+      "buildingType": "Church",
+      "contactPhone": "000 000 0000",
+      "contactEmail": "demo@catholicsa.co.za",
+      "socialLinks": {},
+      "supportedLanguages": [
+        "en"
+      ]
+    }
+  ],
+  "services": [
+    {
+      "churchId": "langebaan",
+      "dayOfWeek": "Wednesday",
+      "time": "09:00",
+      "type": "Mass",
+      "language": "EN"
+    },
+    {
+      "churchId": "laaiplek",
+      "dayOfWeek": "Thursday",
+      "time": "09:00",
+      "type": "Mass",
+      "language": "EN"
+    },
+    {
+      "churchId": "vredenburg",
+      "dayOfWeek": "Friday",
+      "time": "09:00",
+      "type": "Mass",
+      "language": "EN"
+    },
+    {
+      "churchId": "laaiplek",
+      "dayOfWeek": "Saturday",
+      "time": "17:00",
+      "type": "CommunionService",
+      "language": "EN"
+    },
+    {
+      "churchId": "langebaan",
+      "dayOfWeek": "Saturday",
+      "time": "17:30",
+      "type": "Mass",
+      "language": "EN"
+    },
+    {
+      "churchId": "vredenburg",
+      "dayOfWeek": "Sunday",
+      "time": "09:00",
+      "type": "Mass",
+      "language": "EN"
+    },
+    {
+      "churchId": "laingville",
+      "dayOfWeek": "Sunday",
+      "time": "11:00",
+      "type": "Mass",
+      "language": "EN"
+    },
+    {
+      "churchId": "langebaan",
+      "dayOfWeek": "Sunday",
+      "time": "11:00",
+      "type": "CommunionService",
+      "language": "EN"
+    },
+    {
+      "churchId": "saldanha",
+      "dayOfWeek": "Sunday",
+      "time": "09:00",
+      "type": "CommunionService",
+      "language": "EN"
+    },
+    {
+      "churchId": "holy-cross-convent",
+      "dayOfWeek": "Wednesday",
+      "time": "09:00",
+      "type": "Mass",
+      "language": "EN"
+    },
+    {
+      "churchId": "demo-church",
+      "dayOfWeek": "Sunday",
+      "time": "08:00",
+      "type": "Mass",
+      "language": "EN"
+    },
+    {
+      "churchId": "demo-church",
+      "dayOfWeek": "Wednesday",
+      "time": "18:00",
+      "type": "CommunionService",
+      "language": "EN"
+    }
+  ],
+  "confessionTimes": [
+    {
+      "churchId": "saldanha",
+      "dayOfWeek": "Tuesday",
+      "startTime": "09:30",
+      "endTime": null
+    },
+    {
+      "churchId": "vredenburg",
+      "dayOfWeek": "Friday",
+      "startTime": "09:30",
+      "endTime": null
+    },
+    {
+      "churchId": "langebaan",
+      "dayOfWeek": "Saturday",
+      "startTime": "17:00",
+      "endTime": "17:25"
+    },
+    {
+      "churchId": "laaiplek",
+      "dayOfWeek": "Saturday",
+      "startTime": "16:30",
+      "endTime": "16:55"
+    },
+    {
+      "churchId": "demo-church",
+      "dayOfWeek": "Saturday",
+      "startTime": "08:00",
+      "endTime": "08:30",
+      "notes": null
+    }
+  ],
+  "devotions": [
+    {
+      "churchId": "vredenburg",
+      "name": "Eucharistic Adoration & Benediction",
+      "dayOfWeek": "Thursday",
+      "time": "19:00"
+    },
+    {
+      "churchId": "vredenburg",
+      "name": "Rosary Procession",
+      "dayOfWeek": "Wednesday",
+      "time": "19:00"
+    },
+    {
+      "churchId": "demo-church",
+      "name": "Rosary",
+      "dayOfWeek": "Tuesday",
+      "time": "17:30"
+    }
+  ],
+  "parishAssociations": [
+    {
+      "name": "Catholic Women's League (CWL)",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    },
+    {
+      "name": "Pioneers of the Sacred Heart",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    },
+    {
+      "name": "Altar Servers",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    },
+    {
+      "name": "St Vincent de Paul Society",
+      "purpose": "Support for those in need in the parish",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    },
+    {
+      "name": "Holy Cross Senior Citizens' Club",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    }
+  ],
+  "associations": [
+    {
+      "churchId": "vredenburg",
+      "name": "Choir",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    },
+    {
+      "churchId": "laaiplek",
+      "name": "Choir",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    },
+    {
+      "churchId": "laingville",
+      "name": "Choir",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    },
+    {
+      "churchId": "langebaan",
+      "name": "Choir",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    },
+    {
+      "churchId": "saldanha",
+      "name": "Choir",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    },
+    {
+      "churchId": "holy-cross-convent",
+      "name": "Choir",
+      "contactPerson": null,
+      "meetingDay": null,
+      "meetingTime": null
+    },
+    {
+      "churchId": "demo-church",
+      "name": "Choir",
+      "contactPerson": "Demo Choir Leader",
+      "meetingDay": "Thursday",
+      "meetingTime": "19:00"
+    }
+  ],
+  "comments": [
+    {
+      "churchId": "vredenburg",
+      "userDisplayName": "Marilyn C.",
+      "rating": 5,
+      "text": "Warm parish, always feels welcoming."
+    },
+    {
+      "churchId": "vredenburg",
+      "userDisplayName": "Deon P.",
+      "rating": 4,
+      "text": "Could the Friday Mass time be confirmed — arrived to an empty church once.",
+      "reply": {
+        "from": "Fr Jan Mostert OSFS",
+        "text": "Apologies Deon — Friday Mass is 09:00, we'll double check the notice board."
+      }
+    },
+    {
+      "churchId": "demo-church",
+      "userDisplayName": "Demo Parishioner A",
+      "rating": 5,
+      "text": "This is a sample comment that already has a reply - shows what a resolved conversation looks like.",
+      "reply": {
+        "from": "Demo Priest",
+        "text": "Thank you for the sample feedback!"
+      }
+    },
+    {
+      "churchId": "demo-church",
+      "userDisplayName": "Demo Parishioner B",
+      "rating": 4,
+      "text": "This is a sample comment with NO reply yet - practice replying to this one from the Admin Panel."
+    }
+  ],
+  "notices": [
+    {
+      "churchId": "vredenburg",
+      "title": "Baptisms",
+      "body": "Please contact the Parish office to set up an appointment. You will need: Parish Registration Number, a copy of the child's birth certificate, and the names of both godparents — at least one must be a practicing Catholic (or provide a letter from their own church)."
+    },
+    {
+      "churchId": "vredenburg",
+      "title": "Marriages",
+      "body": "Please give the Church at least SIX MONTHS notice of your intention to marry. Contact the Parish Office to arrange the initial interview with the Parish Priest, complete the Pre-Nuptial Enquiry, and arrange Marriage Preparation Classes."
+    },
+    {
+      "churchId": "vredenburg",
+      "title": "Monthly Holy Hour",
+      "body": "First Friday of each month, 08:00 – 09:00."
+    },
+    {
+      "churchId": "langebaan",
+      "title": "Monthly Holy Hour",
+      "body": "Thursday evening before the First Friday of each month, from 18:00."
+    },
+    {
+      "churchId": "demo-church",
+      "title": "Sample Notice",
+      "body": "This is a sample Parochial Notice for training purposes - edit or delete it freely from the Admin Panel."
+    }
+  ],
+  "events": [
+    {
+      "churchId": "langebaan",
+      "title": "Car Boot Market",
+      "date": "2026-08-01",
+      "time": "08:00",
+      "category": "Community",
+      "description": "Looking for an outlet to sell your unwanted goods? Join us at the church grounds, Suffren Street, Langebaan, 08:00 – 12:00. Call or WhatsApp the parish office to book your spot.",
+      "showInNotices": true
+    },
+    {
+      "churchId": "demo-church",
+      "title": "Training Fete",
+      "date": "2026-09-01",
+      "time": "10:00",
+      "category": "Community",
+      "description": "A sample event for training - practice editing or deleting this from the Admin Panel.",
+      "showInNotices": true
+    }
+  ],
+  "safeguardingPolicy": "The Catholic Church's child safeguarding policy is a comprehensive framework designed to create a safe environment, preventing abuse by enforcing strict, proactive measures, including screening, training, and clear, mandatory reporting procedures. Protection: creating, implementing, and maintaining safe environments for children in all Church activities, catechism, and ministries. Individual and administrative/technical non-compliance (for example, failing to sign the Commitment form or apply for clearances) means a person cannot stay in ministry until they comply with the policy requirements.",
+  "liturgicalReadings": [
+    {
+      "date": "2026-07-28",
+      "liturgicalTitle": "Tuesday of the Seventeenth Week in Ordinary Time",
+      "readings": {
+        "en": {
+          "firstReading": "1 Kings 3:5, 7-12",
+          "psalm": "Psalm 119:57, 72, 76-77, 127-128, 129-130",
+          "secondReading": "Romans 8:28-30",
+          "gospel": "Matthew 13:44-52",
+          "source": "manual - verified via web search"
+        }
+      }
+    }
+  ],
+  "saints": [
+    {
+      "id": "st-jude",
+      "name": "Saint Jude Thaddeus",
+      "matchPhrase": "Jude",
+      "feastDay": "October 28",
+      "bio": "One of the Twelve Apostles of Jesus Christ, traditionally identified as the brother of Saint James the Less. He is believed to have preached the Gospel in Judea, Samaria, Idumaea, Syria, Mesopotamia, and Libya, and is honoured as the patron saint of desperate situations and lost causes - a title that grew from the tradition that people invoked him when other saints seemed unable to help.",
+      "patronage": [
+        "desperate situations",
+        "lost causes",
+        "hospitals"
+      ],
+      "medals": [
+        "Saint Jude Medal - commonly worn or carried by those seeking his intercession in difficult circumstances."
+      ],
+      "imageUrl": null,
+      "feastMonthDay": "10-28"
+    },
+    {
+      "id": "sts-martha-mary-lazarus",
+      "name": "Saints Martha, Mary, and Lazarus",
+      "matchPhrase": "Martha",
+      "feastMonthDay": "07-29",
+      "feastDay": "July 29",
+      "bio": "Siblings from Bethany and close friends of Jesus. Martha is remembered for her hospitality and her declaration of faith in Christ; Mary for sitting at Jesus's feet to listen to his teaching; and Lazarus for being raised from the dead by Jesus after four days in the tomb, one of the most striking miracles recorded in the Gospels.",
+      "patronage": [
+        "hospitality",
+        "cooks",
+        "homemakers"
+      ],
+      "medals": [],
+      "imageUrl": null
+    },
+    {
+      "id": "st-ignatius-loyola",
+      "name": "Saint Ignatius of Loyola",
+      "matchPhrase": "Ignatius of Loyola",
+      "feastMonthDay": "07-31",
+      "feastDay": "July 31",
+      "bio": "A Spanish priest and theologian who founded the Society of Jesus (the Jesuits) after a period of convalescence from a battle injury led him to a profound conversion. He wrote the Spiritual Exercises, a guide to prayer and discernment still widely used today, and emphasised finding God in all things.",
+      "patronage": [
+        "soldiers",
+        "spiritual retreats",
+        "the Jesuit order"
+      ],
+      "medals": [
+        "Saint Ignatius Medal - sometimes carried by those undertaking the Spiritual Exercises or discernment."
+      ],
+      "imageUrl": null
+    }
+  ],
+  "prayers": [
+    {
+      "churchId": "vredenburg",
+      "title": "Our Father",
+      "language": "EN",
+      "text": "Our Father, who art in heaven, hallowed be thy name; thy kingdom come; thy will be done on earth as it is in heaven. Give us this day our daily bread; and forgive us our trespasses as we forgive those who trespass against us; and lead us not into temptation, but deliver us from evil. Amen."
+    },
+    {
+      "churchId": "vredenburg",
+      "title": "Hail Mary",
+      "language": "EN",
+      "text": "Hail Mary, full of grace, the Lord is with thee; blessed art thou amongst women, and blessed is the fruit of thy womb, Jesus. Holy Mary, Mother of God, pray for us sinners, now and at the hour of our death. Amen."
+    },
+    {
+      "churchId": "vredenburg",
+      "title": "Glory Be",
+      "language": "EN",
+      "text": "Glory be to the Father, and to the Son, and to the Holy Spirit. As it was in the beginning, is now, and ever shall be, world without end. Amen."
+    },
+    {
+      "churchId": "vredenburg",
+      "title": "Apostles' Creed",
+      "language": "EN",
+      "text": "I believe in God, the Father almighty, Creator of heaven and earth, and in Jesus Christ, his only Son, our Lord, who was conceived by the Holy Spirit, born of the Virgin Mary, suffered under Pontius Pilate, was crucified, died and was buried; he descended into hell; on the third day he rose again from the dead; he ascended into heaven, and is seated at the right hand of God the Father almighty; from there he will come to judge the living and the dead. I believe in the Holy Spirit, the holy catholic Church, the communion of saints, the forgiveness of sins, the resurrection of the body, and life everlasting. Amen."
+    },
+    {
+      "churchId": "vredenburg",
+      "title": "The Angelus",
+      "language": "EN",
+      "text": "V. The Angel of the Lord declared unto Mary. R. And she conceived of the Holy Spirit. Hail Mary... V. Behold the handmaid of the Lord. R. Be it done unto me according to thy word. Hail Mary... V. And the Word was made flesh. R. And dwelt among us. Hail Mary... V. Pray for us, O holy Mother of God. R. That we may be made worthy of the promises of Christ. Let us pray: Pour forth, we beseech thee, O Lord, thy grace into our hearts, that we, to whom the incarnation of Christ, thy Son, was made known by the message of an angel, may by his passion and cross be brought to the glory of his resurrection. Through the same Christ our Lord. Amen."
+    },
+    {
+      "churchId": "demo-church",
+      "title": "Sample Prayer",
+      "language": "EN",
+      "text": "This is a sample prayer entry for training purposes."
+    }
+  ],
+  "biblePassages": {
+    "2026-07-28-first": {
+      "verses": [
+        {
+          "verse": 5,
+          "text": "And our Lord appeared to Salomon in a dream by night, saying: Ask what thou wilt that I may give it thee."
+        },
+        {
+          "verse": 7,
+          "text": "And now Lord God, thou hast made thy servant to reign for David my father, but I am a little child, and ignorant of my going out and coming in."
+        },
+        {
+          "verse": 8,
+          "text": "And thy servant is in the midst of the people, which thou hast chosen, a people infinite, which cannot be numbered and counted for the multitude."
+        },
+        {
+          "verse": 9,
+          "text": "Thou shalt therefore give to thy servant a docible heart, that he may judge the people, and discern between good & evil. For who shall be able to judge this people, this thy people great in number?"
+        },
+        {
+          "verse": 10,
+          "text": "The word therefore was liked before our Lord, that Salomon had asked such a thing."
+        },
+        {
+          "verse": 11,
+          "text": "And our Lord said to Salomon: Because thou hast asked this thing, and hast not desired for thyself many days, nor riches, nor the lives of thine enemies, but hast desired wisdom for thyself to discern judgment:"
+        },
+        {
+          "verse": 12,
+          "text": "behold I have done unto thee according to thy words, and have given thee a wise heart and intelligent, in so much that none before thee hath been like thee, nor shall arise after thee."
+        }
+      ]
+    },
+    "2026-07-28-psalm": {
+      "verses": [
+        {
+          "verse": 57,
+          "text": "Heth. Life. My portion, o Lord, I said to keep thy law."
+        },
+        {
+          "verse": 72,
+          "text": "The law of thy mouth is good unto me, above thousands of gold and silver."
+        },
+        {
+          "verse": 76,
+          "text": "Let thy mercy be done to comfort me, according to thy word unto thy servant."
+        },
+        {
+          "verse": 77,
+          "text": "Let thy commiserations come to me, and I shall live: because thy law is my meditation."
+        },
+        {
+          "verse": 127,
+          "text": "Therefore have I loved thy commandments, above gold and topazius."
+        },
+        {
+          "verse": 128,
+          "text": "Therefore was I directed to all thy commandments: all wicked way I have hated."
+        },
+        {
+          "verse": 129,
+          "text": "Phe. Mouth. Thy testimonies are marvelous: therefore hath my soul searched them."
+        },
+        {
+          "verse": 130,
+          "text": "The declaration of thy words doth illuminate: and giveth understanding to little ones."
+        }
+      ]
+    },
+    "2026-07-28-second": {
+      "verses": [
+        {
+          "verse": 28,
+          "text": "And we know that to them that love God, all things cooperate unto good, to such as according to purpose are called to be saints."
+        },
+        {
+          "verse": 29,
+          "text": "For whom he hath foreknown, he hath also predestinated to be made conformable to the image of his Son: that he might be the first-born in many brethren."
+        },
+        {
+          "verse": 30,
+          "text": "And whom he hath predestinated; them also he hath called. And whom he hath called; them also he hath justified. And whom he hath justified; them also hath he glorified."
+        }
+      ]
+    },
+    "2026-07-28-gospel": {
+      "verses": [
+        {
+          "verse": 44,
+          "text": "The Kingdom of Heaven is like a treasure hidden in a field. Which a man having found, did hide it, and for joy thereof goeth, and selleth all that he hath, and buyeth that field."
+        },
+        {
+          "verse": 45,
+          "text": "Again the Kingdom of Heaven is like to a merchant man, seeking good pearls."
+        },
+        {
+          "verse": 46,
+          "text": "And having found one precious pearl, he went his way, and sold all that he had, and bought it."
+        },
+        {
+          "verse": 47,
+          "text": "Again the Kingdom of Heaven is like to a net cast into the sea, and gathering together of all kind of fishes."
+        },
+        {
+          "verse": 48,
+          "text": "Which, when it was filled, drawing it forth, and sitting by the shore, they chose out the good into vessels, but the bad they did cast out."
+        },
+        {
+          "verse": 49,
+          "text": "So shall it be in the consummation of the world. The Angels shall go forth, and shall separate the evil from among the just."
+        },
+        {
+          "verse": 50,
+          "text": "And shall cast them into the furnace of fire; there shall be weeping and gnashing of teeth."
+        },
+        {
+          "verse": 51,
+          "text": "Have ye understood all these things? They say to him, Yea."
+        },
+        {
+          "verse": 52,
+          "text": "He said unto them: Therefore every Scribe instructed in the Kingdom of Heaven, is like to a man that is an householder, which bringeth forth out of his treasure new things and old."
+        }
+      ]
+    }
+  },
+  "demoConfessionBooking": {
+    "churchId": "demo-church",
+    "name": "Demo Requester",
+    "contactPhone": "082 000 0000",
+    "contactEmail": "demo.requester@example.com",
+    "availability": "Weekday afternoons",
+    "status": "pending"
+  },
+  "demoReport": {
+    "churchId": "demo-church",
+    "text": "Sample report: 'the Wednesday Mass time looks wrong' - practice marking this resolved from the Admin Panel.",
+    "status": "open"
+  },
+  "demoFundraiser": {
+    "churchId": "demo-church",
+    "title": "Sample Roof Repair Fund",
+    "goalAmount": 50000,
+    "raisedAmount": 12500,
+    "currency": "ZAR",
+    "active": true
+  },
+  "demoMedia": {
+    "churchId": "demo-church",
+    "kind": "image",
+    "url": "https://picsum.photos/seed/catholicsa-demo-pending/600/600",
+    "caption": "Sample photo awaiting approval - practice the approve/reject buttons here.",
+    "uploadedByName": "Demo Uploader",
+    "status": "pending"
+  },
+  "demoCourses": [
+    {
+      "churchId": "demo-church",
+      "title": "Sample Published Course",
+      "description": "A published demo course - practice enrolling, reading lessons, and marking them complete.",
+      "catechistName": "Demo Catechist",
+      "status": "published",
+      "lessons": [
+        {
+          "title": "Lesson 1: Welcome",
+          "content": "This is sample lesson content for training purposes.",
+          "order": 1
+        },
+        {
+          "title": "Lesson 2: Next Steps",
+          "content": "More sample lesson content.",
+          "order": 2
+        }
+      ]
+    },
+    {
+      "churchId": "demo-church",
+      "title": "Sample Course Awaiting Review",
+      "description": "A draft course sitting in Pending Review - practice the priest-only Approve/Send Back workflow.",
+      "catechistName": "Demo Catechist",
+      "status": "pendingReview",
+      "lessons": [
+        {
+          "title": "Lesson 1: Draft Content",
+          "content": "This lesson is still in review.",
+          "order": 1
+        }
+      ]
+    }
+  ]
+}

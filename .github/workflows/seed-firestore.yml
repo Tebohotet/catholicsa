@@ -1,0 +1,94 @@
+name: Seed Firestore (manual)
+
+# Deliberately workflow_dispatch ONLY - never on push/pull_request. This
+# script writes to the live Firestore database, so it must never fire
+# automatically, and it must never be reachable from a fork's PR (which
+# is how repo secrets get exfiltrated in public-repo Actions attacks -
+# see step "Guard" below and the notes underneath this file for the
+# other half of that protection, which lives in repo Settings).
+# Quoted deliberately - unquoted `on:` is parsed as the boolean `true`
+# by strict YAML 1.1 parsers (GitHub's own parser special-cases it, but
+# quoting removes the ambiguity for every other tool that might read
+# this file).
+"on":
+  workflow_dispatch:
+    inputs:
+      confirm:
+        description: 'Type SEED-PRODUCTION to confirm - this writes to the live database'
+        required: true
+
+# Least privilege: this job only reads the checked-out code and calls
+# Firestore directly via the service account - it never needs to touch
+# anything through the GITHUB_TOKEN itself.
+permissions:
+  contents: read
+
+# Prevents two seed runs racing each other if someone double-clicks Run,
+# or triggers it again before the first finishes.
+concurrency:
+  group: seed-firestore
+  cancel-in-progress: false
+
+jobs:
+  seed:
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+
+    # This name must match an Environment you create in Settings >
+    # Environments (see the setup notes below) - that's what actually
+    # lets you require a manual approval click before the job (and the
+    # secret it uses) runs at all. Without that Environment configured,
+    # this line is harmless but does nothing.
+    environment: production
+
+    steps:
+      # Belt-and-suspenders on top of GitHub's own rule that only
+      # collaborators with write access can trigger workflow_dispatch at
+      # all: restrict it to specific usernames too. Add more logins as
+      # a comma-separated list if others should be able to run this.
+      - name: Guard - restrict who can run this
+        run: |
+          allowed="Tebohotet"
+          if [[ ",$allowed," != *",${{ github.actor }},"* ]]; then
+            echo "${{ github.actor }} is not allowed to run this workflow."
+            exit 1
+          fi
+
+      - name: Guard - require explicit confirmation text
+        run: |
+          if [ "${{ github.event.inputs.confirm }}" != "SEED-PRODUCTION" ]; then
+            echo "Confirmation text didn't match 'SEED-PRODUCTION'. Nothing was run."
+            exit 1
+          fi
+
+      - name: Guard - only allow running from main
+        run: |
+          if [ "${{ github.ref }}" != "refs/heads/main" ]; then
+            echo "This workflow only runs against main (got ${{ github.ref }}). Nothing was run."
+            exit 1
+          fi
+
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Set up Node
+        uses: actions/setup-node@v4
+        with:
+          node-version: '20'
+          cache: 'npm'
+
+      # Uses package-lock.json for a reproducible install - deliberately
+      # NOT relying on the node_modules currently committed to this repo
+      # (see the separate repo-cleanup note about untracking that).
+      - name: Install dependencies
+        run: npm ci
+
+      # The secret only ever exists as an in-memory env var for this one
+      # step - never written to disk, never echoed. GitHub also
+      # auto-masks any text matching a registered secret's value in logs,
+      # as a second layer, but the real protection is just never printing
+      # it in the first place.
+      - name: Run seed script
+        env:
+          FIREBASE_SERVICE_ACCOUNT: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+        run: node lib/seed/seed.js

@@ -1,0 +1,29 @@
+{
+  "project_info": {
+    "project_number": "38606314792",
+    "project_id": "catholicsa-61b87",
+    "storage_bucket": "catholicsa-61b87.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:38606314792:android:8df72c1bb98338a5a8041d",
+        "android_client_info": {
+          "package_name": "com.example.catholicsa"
+        }
+      },
+      "oauth_client": [],
+      "api_key": [
+        {
+          "current_key": "AIzaSyCBAHBcSB3g0WFtD2AOeVQihCKsROeJeKg"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": []
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}
