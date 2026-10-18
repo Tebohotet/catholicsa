@@ -529,9 +529,16 @@ class _ReadingsScreenState extends ConsumerState<ReadingsScreen> with RouteAware
                               ],
                             ),
                           ),
-                          if ((en.themedBoxBody ?? '').isNotEmpty) ...[
-                            const SizedBox(height: 16),
-                            Container(
+                          const SizedBox(height: 20),
+                          _EditableField(
+                            editMode: _editMode,
+                            dateKey: _dateKey,
+                            fieldKey: 'themedBoxBody',
+                            label: 'Themed Box',
+                            value: en.themedBoxBody ?? '',
+                            isHidden: en.hiddenFields.contains('themedBoxBody'),
+                            onSaved: () => setState(_load),
+                            child: Container(
                               width: double.infinity,
                               padding: const EdgeInsets.all(14),
                               color: AppColors.stone,
@@ -543,11 +550,11 @@ class _ReadingsScreenState extends ConsumerState<ReadingsScreen> with RouteAware
                                       padding: const EdgeInsets.only(bottom: 6),
                                       child: Text(en.themedBoxTitle!, style: const TextStyle(fontFamily: appSerif, fontSize: 14, color: Colors.white)),
                                     ),
-                                  Text(en.themedBoxBody!, style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.5)),
+                                  Text(en.themedBoxBody ?? '', style: const TextStyle(fontSize: 13, color: Colors.white, height: 1.5)),
                                 ],
                               ),
                             ),
-                          ],
+                          ),
                           if (en.petitions.isNotEmpty) ...[
                             const SizedBox(height: 20),
                             const Text('Prayers of the Faithful', style: TextStyle(fontFamily: appSerif, fontSize: 16)),
