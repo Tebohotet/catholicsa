@@ -21,6 +21,11 @@ void main() {
         ),
       ));
       expect(find.byType(LinearProgressIndicator), findsOneWidget);
+      // Let the fake 10s timer actually fire before the test ends -
+      // flutter_test asserts no Timer is still pending once the widget
+      // tree is disposed, and this one only exists because we gave
+      // Future.delayed a real duration above.
+      await tester.pump(const Duration(seconds: 10));
     });
 
     testWidgets('shows error text when the future throws - this is the exact case that used to hang forever', (tester) async {
