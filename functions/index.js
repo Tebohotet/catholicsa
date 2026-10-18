@@ -1100,6 +1100,28 @@ exports.syncFullBible = functions.runWith({ timeoutSeconds: 540, memory: "512MB"
     const bookContentEnd = i + 1 < bookBoundaries.length ? bookBoundaries[i + 1].index : contentText.length;
     const bookText = contentText.substring(bookContentStart, bookContentEnd);
 
+    // Real, confirmed bug found directly from live synced data (not
+    // theorized): this edition prints a one-line "<Book> Chapter N,
+    // <title>." heading before each new chapter, with no "N:N." verse
+    // marker of its own - the regex below only looks for verse markers,
+    // so that heading silently gets absorbed into the END of the
+    // PREVIOUS chapter's last verse instead of being dropped. Confirmed
+    // directly in the app: Douay-Rheims Psalm 50 verse 21 actually reads
+    // "...lay calves upon thy altar. Psalms Chapter 51 Quid gloriaris.
+    // David condemneth the wickedness of Doeg, and foretelleth his
+    // destruction." - none of which is part of verse 21. (Note: the
+    // separately-flagged concern that superscriptions might shift verse
+    // numbers by one was checked against this same live data and is NOT
+    // a bug - Psalm 50 verses 1-2 are already the superscription and
+    // "Have mercy on me, O God" is already verse 3, matching the
+    // Vulgate/Douay-Rheims numbering exactly.)
+    // Stripped per-book (using this book's own raw name, not a generic
+    // pattern) so real verse text that happens to mention an unrelated
+    // book/chapter is never touched.
+    const chapterHeadingStrip = new RegExp(
+      `\\s*${boundary.rawName.replace(/[.*+?^${}()|[\]\\]/g, "\\$&")}\\s+Chapter\\s+\\d+\\b[\\s\\S]*$`
+    );
+
     const verseMatches = [...bookText.matchAll(/(\d+):(\d+)\.\s+/g)];
     const chapters = {};
     for (let j = 0; j < verseMatches.length; j++) {
@@ -1107,7 +1129,7 @@ exports.syncFullBible = functions.runWith({ timeoutSeconds: 540, memory: "512MB"
       const verse = verseMatches[j][2];
       const start = verseMatches[j].index + verseMatches[j][0].length;
       const end = j + 1 < verseMatches.length ? verseMatches[j + 1].index : bookText.length;
-      const verseText = bookText.substring(start, end).trim();
+      const verseText = bookText.substring(start, end).replace(chapterHeadingStrip, "").trim();
       if (!chapters[chapter]) chapters[chapter] = {};
       chapters[chapter][verse] = verseText;
     }
