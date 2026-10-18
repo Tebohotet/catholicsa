@@ -24,7 +24,21 @@ dependencies:
   # implementation at all (confirmed from the Flutter team). See
   # lib/config/google_desktop_oauth_config.dart for the one-time Google
   # Cloud Console setup this needs.
-  google_sign_in_all_platforms: ^2.0.3
+  #
+  # Pinned to the 1.x line deliberately, not latest (2.x): starting at
+  # 2.0.0 this package's mobile implementation requires
+  # google_sign_in ^7.1.1, which conflicts with google_sign_in ^6.2.1
+  # above (confirmed via pub.dev - no version of google_sign_in
+  # satisfies both ^6.2.1 and ^7.1.1 at once), and that's what was
+  # actually causing `flutter pub get` to fail with exit code 1 once
+  # CI could finally run. The package's own migration guide confirms
+  # the GoogleSignIn/GoogleSignInParams API used in
+  # signInWithGoogleWindows() (auth_service.dart) is unchanged going
+  # into 2.0.0, so staying on 1.x costs nothing functionally - it just
+  # avoids the forced google_sign_in v7 upgrade, which would otherwise
+  # require rewriting signInWithGoogle() too (v7 is a breaking rewrite
+  # of google_sign_in itself, unrelated to this package).
+  google_sign_in_all_platforms: ^1.2.1
 
   # Routing
   go_router: ^14.3.0
