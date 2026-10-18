@@ -1,0 +1,90 @@
+name: Claude Daily Coding
+
+# Unattended path: fires on its own every day AND can be fired manually
+# any time from the Actions tab (workflow_dispatch), without waiting
+# for the schedule. Runs entirely on GitHub's servers - not tied to any
+# one computer, so it keeps working regardless of which PC you're on.
+"on":
+  schedule:
+    # 06:00 UTC = 08:00 Africa/Johannesburg
+    - cron: "0 6 * * *"
+  workflow_dispatch: {}
+
+# contents:write + pull-requests:write is what lets Claude push a
+# branch and open a PR. It never gets permission to touch main
+# directly - that's enforced by instructing it in the prompt below,
+# not by a GitHub permission (there's no "branches only" permission),
+# so branch protection on main (Settings > Branches) is the real
+# backstop - recommended given what happened with the exposed key.
+permissions:
+  contents: write
+  pull-requests: write
+  issues: read
+  id-token: write
+  actions: read
+
+# So a slow run doesn't overlap with the next day's, or a manual fire
+# while the schedule is already running.
+concurrency:
+  group: claude-daily-coding
+  cancel-in-progress: false
+
+jobs:
+  work:
+    runs-on: ubuntu-latest
+    # Hard ceiling on run time - caps cost if something goes sideways.
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@v6
+        with:
+          # Full history, not just the last commit - Claude needs this
+          # to create branches properly and for git operations that
+          # reference more than the current tip.
+          fetch-depth: 0
+
+      - uses: anthropics/claude-code-action@v1
+        env:
+          # Lets `gh` (already on the runner) authenticate for `gh pr
+          # create`. actions/checkout already wires the same token up
+          # for plain `git push` over https, via its default
+          # persist-credentials behavior.
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        with:
+          anthropic_api_key: ${{ secrets.ANTHROPIC_API_KEY }}
+          # claude_code_oauth_token: ${{ secrets.CLAUDE_CODE_OAUTH_TOKEN }}
+          prompt: |
+            Read PROJECT_STATUS.md at the repo root - it's this
+            project's working memory: what's done, what's blocked, and
+            what's next. Pick the single next unchecked item under
+            "Next up" (top to bottom - do not skip ahead). If every
+            item under "In progress / blocked on you" is still
+            unchecked, stop and open an issue explaining that you're
+            blocked on those instead of starting new work - they need
+            the project owner to act first.
+
+            Implement the item you picked, fully and carefully.
+
+            Rules, no exceptions:
+            - Never commit or push to main directly.
+            - Create a new branch named work/<short-description>, do
+              all your changes there, commit, and push that branch
+              (`git push -u origin <branch>`).
+            - Open a pull request from that branch into main with
+              `gh pr create`, with a clear title and a description of
+              what changed, why, and anything you're unsure about.
+            - As part of that same branch/PR, update PROJECT_STATUS.md:
+              check off the item you finished, or if you could only
+              make partial progress, leave it unchecked and add a note
+              under it explaining exactly where you stopped and why.
+            - If the task turns out to need a decision only the project
+              owner can make (a design choice, missing content, a
+              product tradeoff), stop, open the PR or an issue
+              explaining precisely what's blocking you, and do not
+              guess at the answer.
+            - Never open, read the contents of, or print any value
+              from lib/seed/serviceAccountKey.json or any other
+              credential/secret file. If a task seems to require
+              secret values, stop and explain why in an issue instead.
+          claude_args: |
+            --max-turns 40
+            --allowedTools "Bash,Edit,Write,Read,Glob,Grep"
