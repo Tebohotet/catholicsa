@@ -7,19 +7,49 @@ class MidiNoteEvent {
   const MidiNoteEvent({required this.midiNote, required this.durationTicks});
 }
 
-/// Writes a single-track, format-0 Standard MIDI File - the same
-/// approach already tested and verified working in the Node.js
-/// version of this pipeline (confirmed real MThd/MTrk header bytes and
-/// correct note-on data on a real test file before this was ported).
-/// Ported directly rather than relying on a third-party Dart package
-/// whose own correctness couldn't be independently confirmed.
+/// Writes a Standard MIDI File - the same approach already tested and
+/// verified working in the Node.js version of this pipeline (confirmed
+/// real MThd/MTrk header bytes and correct note-on data on a real test
+/// file before this was ported). Ported directly rather than relying
+/// on a third-party Dart package whose own correctness couldn't be
+/// independently confirmed.
 class SimpleMidiWriter {
   static const int ticksPerQuarterNote = 480;
 
-  static Uint8List write(List<MidiNoteEvent> events) {
+  /// Writes one track per element of [tracks]. Every track starts at
+  /// time zero and is played back simultaneously, so a hymn
+  /// arrangement's separate voices (SATB, or melody + accompaniment)
+  /// all sound together instead of one voice replacing the others.
+  /// A single track still produces the same file as before: format 0
+  /// (single-track) rather than format 1, with everything else
+  /// unchanged - the common single-voice case is untouched.
+  static Uint8List write(List<List<MidiNoteEvent>> tracks) {
+    if (tracks.isEmpty) {
+      throw ArgumentError('write() needs at least one track of events.');
+    }
+
+    final header = BytesBuilder();
+    header.add('MThd'.codeUnits);
+    header.add(_uint32(6)); // header chunk length
+    header.add(_uint16(tracks.length == 1 ? 0 : 1)); // format 0 (single track) or 1 (several, simultaneous)
+    header.add(_uint16(tracks.length));
+    header.add(_uint16(ticksPerQuarterNote));
+
+    final full = BytesBuilder();
+    full.add(header.toBytes());
+    for (final trackEvents in tracks) {
+      full.add(_writeTrack(trackEvents));
+    }
+    return full.toBytes();
+  }
+
+  static Uint8List _writeTrack(List<MidiNoteEvent> events) {
     final trackBytes = BytesBuilder();
 
     // Tempo meta event: 120 BPM = 500000 microseconds per quarter note.
+    // Written into every track (harmless if repeated) so each track is
+    // correctly timed on its own, without relying on a separate
+    // tempo-only track that other players might not expect.
     trackBytes.add([0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20]);
 
     for (final event in events) {
@@ -41,23 +71,11 @@ class SimpleMidiWriter {
     trackBytes.add([0x00, 0xFF, 0x2F, 0x00]);
 
     final trackData = trackBytes.toBytes();
-
-    final header = BytesBuilder();
-    header.add('MThd'.codeUnits);
-    header.add(_uint32(6)); // header chunk length
-    header.add(_uint16(0)); // format 0 - single track
-    header.add(_uint16(1)); // one track
-    header.add(_uint16(ticksPerQuarterNote));
-
     final track = BytesBuilder();
     track.add('MTrk'.codeUnits);
     track.add(_uint32(trackData.length));
     track.add(trackData);
-
-    final full = BytesBuilder();
-    full.add(header.toBytes());
-    full.add(track.toBytes());
-    return full.toBytes();
+    return track.toBytes();
   }
 
   static List<int> _uint16(int value) => [(value >> 8) & 0xFF, value & 0xFF];
