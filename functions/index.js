@@ -1126,11 +1126,30 @@ exports.syncFullBible = functions.runWith({ timeoutSeconds: 540, memory: "512MB"
     const chapters = {};
     for (let j = 0; j < verseMatches.length; j++) {
       const chapter = parseInt(verseMatches[j][1], 10);
-      const verse = verseMatches[j][2];
+      let verse = parseInt(verseMatches[j][2], 10);
       const start = verseMatches[j].index + verseMatches[j][0].length;
       const end = j + 1 < verseMatches.length ? verseMatches[j + 1].index : bookText.length;
       const verseText = bookText.substring(start, end).replace(chapterHeadingStrip, "").trim();
       if (!chapters[chapter]) chapters[chapter] = {};
+      // Psalms only - verified against the real Gutenberg #8300 text:
+      // Vulgate Psalm 9 is Hebrew Psalms 9 + 10 combined, and this edition
+      // restarts the second half's numbering at "9:1." (after a "(Psalm
+      // Chapter 10 according to the Hebrews.)" note) instead of continuing
+      // at 9:22. Without this, Hebrew Psalm 10's text silently overwrote
+      // 9:1-18. The second half is stored at 9:22-39 instead, its proper
+      // Vulgate/Douay-Rheims numbering (lib/utils/psalm_numbering.dart
+      // maps lectionary "Psalm 10:N" to 9:N+21 to match). Any other
+      // repeated verse number in Psalms is a source typo (e.g. Psalm 6:6
+      // is printed as "5:5.") - keep the first occurrence rather than let
+      // the typo overwrite a real verse, and flag it for review.
+      if (bookCode === "psa" && chapters[chapter][verse] !== undefined) {
+        if (chapter === 9) {
+          verse += 21;
+        } else {
+          needsReview.push(`Psalms ${chapter}:${verse} appears twice in the source - kept the first, skipped: "${verseText.substring(0, 120)}"`);
+          continue;
+        }
+      }
       chapters[chapter][verse] = verseText;
     }
 

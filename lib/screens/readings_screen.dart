@@ -13,6 +13,7 @@ import '../providers/view_as_role_provider.dart';
 import '../widgets/share_button.dart';
 import '../widgets/app_calendar.dart';
 import '../utils/bible_citation_parser.dart';
+import '../utils/psalm_numbering.dart';
 import 'bible_screen.dart';
 import 'hymns_screen.dart';
 import 'super_admin_panel_screen.dart' show SaintsManagementSection;
@@ -661,29 +662,44 @@ class _InlineScripture extends StatelessWidget {
   final String citation;
   const _InlineScripture({required this.citation});
 
-  /// Confirmed directly (not assumed) from multiple sources: the
-  /// Douay-Rheims, translated from the Latin Vulgate, uses the older
-  /// Septuagint/Vulgate psalm numbering - but a lectionary citation like
-  /// "Psalm 31" is written in the modern Hebrew numbering used by the
-  /// USCCB and most contemporary sources. These two systems agree for
-  /// Psalms 1-8 and 148-150, but are offset by one throughout the
-  /// middle range, because the Vulgate combines Hebrew Psalms 9 and 10
-  /// into a single Psalm 9. Applied only to the Psalms book code - this
-  /// is specific to how the Psalter alone was historically renumbered,
-  /// not a general citation issue affecting any other book.
-  ///
-  /// Honest limitation: this corrects the CHAPTER number. Some psalms
-  /// also carry a verse-numbering shift within the chapter itself (the
-  /// Vulgate counts a psalm's title/superscription as verse 1 in some
-  /// psalms, shifting every verse after it by one) - that finer,
-  /// psalm-by-psalm verse offset isn't corrected here, since it isn't
-  /// a single, consistent rule the way the chapter offset is.
-  static int _lectionaryToDouayRheimsPsalmChapter(int hebrewNumber) {
-    if (hebrewNumber <= 8) return hebrewNumber;
-    if (hebrewNumber == 9 || hebrewNumber == 10) return 9;
-    if (hebrewNumber >= 11 && hebrewNumber <= 146) return hebrewNumber - 1;
-    if (hebrewNumber == 147) return 146;
-    return hebrewNumber; // 148-150, numbering re-converges
+  /// Lectionary psalm citations use the modern Hebrew/NABRE numbering;
+  /// the synced Douay-Rheims uses the older Vulgate numbering. The
+  /// chapter offset AND the verse-level shifts at the psalms the two
+  /// traditions split or merge differently (9/10, 114/115, 116, 147)
+  /// are handled by [PsalmNumbering] - see there for what was verified.
+  /// Each cited verse is mapped individually, since one Hebrew psalm
+  /// can land in two different Douay-Rheims chapters (Hebrew 116:1-9 is
+  /// Douay-Rheims 114, 116:10-19 is 115). Verses are still labelled with
+  /// the citation's own numbers, so the inline text matches the
+  /// citation printed right above it. Every other book passes through
+  /// unchanged.
+  static List<({int chapter, List<({int label, int key})>? verses})> _resolveFetchPlan(
+    String bookCode,
+    List<({int chapter, List<int>? verses})> specs,
+  ) {
+    if (bookCode != 'psa') {
+      return [
+        for (final s in specs)
+          (chapter: s.chapter, verses: s.verses?.map((v) => (label: v, key: v)).toList()),
+      ];
+    }
+    final plan = <({int chapter, List<({int label, int key})>? verses})>[];
+    for (final s in specs) {
+      if (s.verses == null) {
+        plan.add((chapter: PsalmNumbering.hebrewToDouayRheimsChapter(s.chapter), verses: null));
+        continue;
+      }
+      for (final v in s.verses!) {
+        final mapped = PsalmNumbering.hebrewToDouayRheims(s.chapter, v);
+        final entry = (label: v, key: mapped.verse);
+        if (plan.isNotEmpty && plan.last.chapter == mapped.chapter && plan.last.verses != null) {
+          plan.last.verses!.add(entry);
+        } else {
+          plan.add((chapter: mapped.chapter, verses: [entry]));
+        }
+      }
+    }
+    return plan;
   }
 
   /// Session-level cache, keyed by "translationCode/bookCode/chapter" -
@@ -776,14 +792,11 @@ class _InlineScripture extends StatelessWidget {
     if (!BibleCitationParser.booksLoaded) return const SizedBox.shrink();
     final parsed = BibleCitationParser.parse(citation);
     if (parsed == null) return const SizedBox.shrink();
-    final specs = _parseChapterSpecs(citation);
+    final specs = _resolveFetchPlan(parsed.bookCode, _parseChapterSpecs(citation));
     if (specs.isEmpty) return const SizedBox.shrink();
 
     return FutureBuilder<List<Map<String, dynamic>?>>(
-      future: Future.wait(specs.map((s) {
-        final chapterToFetch = parsed.bookCode == 'psa' ? _lectionaryToDouayRheimsPsalmChapter(s.chapter) : s.chapter;
-        return _getChapterCached(parsed.bookCode, chapterToFetch);
-      })),
+      future: Future.wait(specs.map((s) => _getChapterCached(parsed.bookCode, s.chapter))),
       builder: (context, snap) {
         if (snap.connectionState != ConnectionState.done) {
           return const Padding(
@@ -805,12 +818,13 @@ class _InlineScripture extends StatelessWidget {
           // null verses means "whole chapter from here" - genuinely
           // means every verse actually present in that chapter's data,
           // sorted numerically, not a guessed count.
-          final verseNumbers = spec.verses ?? (verses.keys.map(int.parse).toList()..sort());
-          for (final v in verseNumbers) {
-            final text = verses[v.toString()];
+          final verseRefs = spec.verses ??
+              (verses.keys.map(int.parse).toList()..sort()).map((v) => (label: v, key: v)).toList();
+          for (final v in verseRefs) {
+            final text = verses[v.key.toString()];
             if (text != null) {
               if (buffer.isNotEmpty) buffer.write(' ');
-              buffer.write('$v. $text');
+              buffer.write('${v.label}. $text');
             }
           }
         }
