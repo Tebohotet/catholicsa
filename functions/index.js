@@ -13,6 +13,8 @@
 const functions = require("firebase-functions/v1");
 const admin = require("firebase-admin");
 const cheerio = require("cheerio");
+const fs = require("fs");
+const path = require("path");
 admin.initializeApp();
 
 // Real, confirmed bug found via `firebase functions:log`: every call to
@@ -876,6 +878,24 @@ const BIBLE_SOURCES = {
   douayRheims: {
     name: "Douay-Rheims (Challoner Revision)",
     sourceUrl: "https://www.gutenberg.org/files/8300/8300-h/8300-h.htm",
+    // Real, confirmed finding: Project Gutenberg's own published policy
+    // (gutenberg.org/policy/robot_access.html) blocks all requests from
+    // "hosted servers" - their term for cloud/datacenter IP ranges,
+    // which is exactly what a Cloud Function's egress IP is. Every live
+    // fetch from here gets HTTP 403 regardless of headers/retries - it's
+    // an IP-class block, not a rate limit or a missing User-Agent. The
+    // old /files/8300/8300-h/8300-h.htm path has also separately started
+    // 403ing with an Apache .htaccess error even for ordinary (non-cloud)
+    // browsers, independent of the IP block - Gutenberg has reorganized
+    // this book's file layout. Both problems are avoided for good by
+    // bundling one verified-good copy (downloaded from a real residential
+    // connection, from the book's current working path,
+    // gutenberg.org/cache/epub/8300/pg8300-images.html) as a static asset
+    // deployed with the function, and reading it from disk below instead
+    // of fetching it live. If this translation is ever removed from
+    // production use this same pattern for any future source that turns
+    // out to block cloud IPs.
+    localAssetPath: "assets/douay-rheims-8300.html",
     translationCode: "douayRheims",
     isPublicDomain: true,
     licenseNote: "Confirmed public domain - Project Gutenberg, Wikipedia, Internet Archive.",
@@ -925,11 +945,26 @@ exports.syncFullBible = functions.runWith({ timeoutSeconds: 540, memory: "512MB"
 
   const db = admin.firestore();
 
-  const response = await fetch(source.sourceUrl);
-  if (!response.ok) {
-    throw new functions.https.HttpsError("unavailable", `Could not fetch source text: HTTP ${response.status}`);
+  let html;
+  if (source.localAssetPath) {
+    // See the comment on douayRheims.localAssetPath above for why this
+    // source is read from a bundled file instead of fetched live.
+    const assetFullPath = path.join(__dirname, source.localAssetPath);
+    try {
+      html = fs.readFileSync(assetFullPath, "utf8");
+    } catch (err) {
+      throw new functions.https.HttpsError(
+        "internal",
+        `Bundled source text missing or unreadable at ${source.localAssetPath}: ${err.message}`
+      );
+    }
+  } else {
+    const response = await fetch(source.sourceUrl);
+    if (!response.ok) {
+      throw new functions.https.HttpsError("unavailable", `Could not fetch source text: HTTP ${response.status}`);
+    }
+    html = await response.text();
   }
-  const html = await response.text();
 
   const text = html
     // Real, confirmed bug found from the last diagnostic: tag-stripping
