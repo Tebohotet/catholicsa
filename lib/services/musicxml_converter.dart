@@ -34,19 +34,29 @@ class MusicXmlToMidiConverter {
   }
 
   /// Parses every note across every part and measure, in document
-  /// order, into MIDI events. Only the first part is used if a score
-  /// has several (e.g. separate staves for different voices) - a real
-  /// limitation worth knowing, since a hymn arrangement often has more
-  /// than one voice/part and this only plays the first one found.
-  static List<MidiNoteEvent> parseNotes(String xmlString) {
+  /// order, into one MIDI note-event list per `<part>`. A hymn
+  /// arrangement often has more than one voice/part (SATB on separate
+  /// staves, or melody + accompaniment), and every voice should be
+  /// heard, not just whichever one comes first in the file - so every
+  /// part is parsed and returned, in document order, for the caller to
+  /// write out as its own simultaneous MIDI track.
+  static List<List<MidiNoteEvent>> parseAllParts(String xmlString) {
     final doc = XmlDocument.parse(xmlString);
+    return [for (final part in doc.findAllElements('part')) _parsePartNotes(part)];
+  }
+
+  /// Convenience wrapper for callers that only want a single melody
+  /// line: the first part's notes, or an empty list if the score has
+  /// no parts at all. `convert()` below uses [parseAllParts] directly
+  /// so no voice is dropped.
+  static List<MidiNoteEvent> parseNotes(String xmlString) {
+    final allParts = parseAllParts(xmlString);
+    return allParts.isEmpty ? <MidiNoteEvent>[] : allParts.first;
+  }
+
+  static List<MidiNoteEvent> _parsePartNotes(XmlElement part) {
     final events = <MidiNoteEvent>[];
-
-    final parts = doc.findAllElements('part');
-    if (parts.isEmpty) return events;
-    final firstPart = parts.first;
-
-    for (final measure in firstPart.findElements('measure')) {
+    for (final measure in part.findElements('measure')) {
       for (final noteEl in measure.findElements('note')) {
         final typeEl = noteEl.getElement('type');
         final durationType = typeEl?.innerText ?? 'quarter';
@@ -73,10 +83,13 @@ class MusicXmlToMidiConverter {
 
   static Uint8List convert(Uint8List mxlBytes) {
     final xmlString = extractMusicXmlFromMxlBytes(mxlBytes);
-    final events = parseNotes(xmlString);
-    if (events.isEmpty) {
+    // Every part becomes its own simultaneous MIDI track; a part that
+    // Audiveris produced with no note/rest elements at all is dropped
+    // rather than written out as a dead empty track.
+    final parts = parseAllParts(xmlString).where((events) => events.isNotEmpty).toList();
+    if (parts.isEmpty) {
       throw Exception('No notes were found in the converted score - Audiveris may not have recognized any notation on this page.');
     }
-    return SimpleMidiWriter.write(events);
+    return SimpleMidiWriter.write(parts);
   }
 }

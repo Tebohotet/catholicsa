@@ -5,15 +5,19 @@ import 'super_admin_system_screen.dart';
 import 'super_admin_store_screen.dart';
 import 'super_admin_development_screen.dart';
 import 'super_admin_designer_screen.dart';
+import 'super_admin_directory_screen.dart';
 import '../widgets/super_admin_menu_widgets.dart';
 import '../theme/app_theme.dart';
 
-/// The real landing menu for Super Admin - five focused categories
-/// instead of one long scroll through seventeen sections. Role
-/// grants/revokes (the existing Super Admin - Roles screen) stay
-/// reachable from here too, since granting a Super Admin/Developer role
-/// is a distinct, highest-stakes action from everything else on this
-/// hub.
+/// The real landing menu for Super Admin - focused categories instead
+/// of one long scroll through seventeen sections. Role grants/revokes
+/// (the existing Super Admin - Roles screen) stay reachable from here
+/// too, since granting a Super Admin/Developer role is a distinct,
+/// highest-stakes action from everything else on this hub. Directory
+/// and Audit Log were the last two sections still only reachable by
+/// scrolling that old Roles screen rather than having a focused home of
+/// their own - added here for the same reason System/Store/Designer
+/// already had one.
 class SuperAdminHubScreen extends StatelessWidget {
   const SuperAdminHubScreen({super.key});
 
@@ -80,6 +84,23 @@ class SuperAdminHubScreen extends StatelessWidget {
                     title: 'Designer',
                     subtitle: 'Design tokens, app branding, and custom pages.',
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SuperAdminDesignerScreen())),
+                  ),
+                  const SizedBox(height: 8),
+                  AdminMenuCard(
+                    icon: Icons.map_outlined,
+                    title: 'Directory',
+                    subtitle: 'Countries and Provinces - the top of the administrative hierarchy.',
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SuperAdminDirectoryScreen())),
+                  ),
+                  const SizedBox(height: 8),
+                  AdminMenuCard(
+                    icon: Icons.history,
+                    title: 'Audit Log',
+                    subtitle: 'Read-only record of every Super Admin / Developer / Designer / Auditor role grant and revoke.',
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminSectionHost(
+                      title: 'Audit Log',
+                      child: AuditLogSection(),
+                    ))),
                   ),
                 ],
               ),

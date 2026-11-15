@@ -553,31 +553,7 @@ class _SuperAdminPanelScreenState extends State<SuperAdminPanelScreen> {
                       style: TextStyle(fontSize: 11, color: Colors.black45),
                     ),
                     const SizedBox(height: 10),
-                    GenericAdminCrudSection(
-                      spec: AdminCollectionSpec(
-                        title: 'Country',
-                        icon: Icons.flag_outlined,
-                        fields: const [
-                          AdminFieldSpec(key: 'name', label: 'Name', required: true, hint: 'e.g. South Africa'),
-                        ],
-                        titleBuilder: (c) => c['name'] ?? '',
-                        subtitleBuilder: (c) => '',
-                        fetchAll: () => FirestoreService().getCountries(),
-                        onAdd: (data) async {
-                          await FirestoreService().addCountry(data['name']);
-                          _refreshCountryDependents();
-                        },
-                        onEdit: (id, data) async {
-                          await FirestoreService().updateCountry(id, data['name']);
-                          _refreshCountryDependents();
-                        },
-                        onDelete: (id) async {
-                          await FirestoreService().deleteCountry(id);
-                          _refreshCountryDependents();
-                        },
-                        idOf: (c) => c['id'],
-                      ),
-                    ),
+                    CountryManagementSection(onCountryChanged: _refreshCountryDependents),
 
                     const SizedBox(height: 32),
                     const SectionLabel(numeral: 'XIII', title: 'Provinces'),
@@ -586,7 +562,7 @@ class _SuperAdminPanelScreenState extends State<SuperAdminPanelScreen> {
                       style: TextStyle(fontSize: 11, color: Colors.black45),
                     ),
                     const SizedBox(height: 10),
-                    _ProvinceManagementSection(key: _provinceManagementKey, onProvinceChanged: _refreshProvinceDependents),
+                    ProvinceManagementSection(key: _provinceManagementKey, onProvinceChanged: _refreshProvinceDependents),
 
                     const SizedBox(height: 32),
                     const SectionLabel(numeral: 'XIV', title: 'Feast Calendar Sync'),
@@ -622,7 +598,7 @@ class _SuperAdminPanelScreenState extends State<SuperAdminPanelScreen> {
                       style: TextStyle(fontSize: 11, color: Colors.black45),
                     ),
                     const SizedBox(height: 10),
-                    const _AuditLogSection(),
+                    const AuditLogSection(),
                   ],
                 ),
               ),
@@ -1657,21 +1633,67 @@ class _FeastCalendarSyncSectionState extends State<FeastCalendarSyncSection> {
   }
 }
 
+/// Pulled out into its own public widget so it can be reused on a
+/// focused page of its own (see SuperAdminDirectoryScreen), the same way
+/// Bible/Saints/FeastCalendarSync etc. already were - rather than only
+/// being reachable by scrolling the old Roles screen below. The
+/// required onProvinceChanged callback is still how that giant screen
+/// tells its Create-Parish and Diocese sections a province changed; a
+/// standalone page with no sibling sections to refresh just passes a
+/// no-op.
+///
 /// Same structure and reasoning as _DioceseManagementSection, one level
 /// higher in the hierarchy - a province genuinely belongs to a country,
 /// and the generic GenericAdminCrudSection framework can't do a
 /// dynamically-fetched dropdown (only static option lists), which is
 /// exactly why this field never existed until now despite addProvince
 /// having supported it since Country CRUD was first built.
-class _ProvinceManagementSection extends StatefulWidget {
+class ProvinceManagementSection extends StatefulWidget {
   final VoidCallback onProvinceChanged;
-  const _ProvinceManagementSection({super.key, required this.onProvinceChanged});
+  const ProvinceManagementSection({super.key, required this.onProvinceChanged});
 
   @override
-  State<_ProvinceManagementSection> createState() => _ProvinceManagementSectionState();
+  State<ProvinceManagementSection> createState() => _ProvinceManagementSectionState();
 }
 
-class _ProvinceManagementSectionState extends State<_ProvinceManagementSection> {
+/// Extracted alongside ProvinceManagementSection for the same reason -
+/// a real home of its own in the newer hub, in addition to its existing
+/// spot in the old Roles screen's long scroll below.
+class CountryManagementSection extends StatelessWidget {
+  final VoidCallback? onCountryChanged;
+  const CountryManagementSection({super.key, this.onCountryChanged});
+
+  @override
+  Widget build(BuildContext context) {
+    return GenericAdminCrudSection(
+      spec: AdminCollectionSpec(
+        title: 'Country',
+        icon: Icons.flag_outlined,
+        fields: const [
+          AdminFieldSpec(key: 'name', label: 'Name', required: true, hint: 'e.g. South Africa'),
+        ],
+        titleBuilder: (c) => c['name'] ?? '',
+        subtitleBuilder: (c) => '',
+        fetchAll: () => FirestoreService().getCountries(),
+        onAdd: (data) async {
+          await FirestoreService().addCountry(data['name']);
+          onCountryChanged?.call();
+        },
+        onEdit: (id, data) async {
+          await FirestoreService().updateCountry(id, data['name']);
+          onCountryChanged?.call();
+        },
+        onDelete: (id) async {
+          await FirestoreService().deleteCountry(id);
+          onCountryChanged?.call();
+        },
+        idOf: (c) => c['id'],
+      ),
+    );
+  }
+}
+
+class _ProvinceManagementSectionState extends State<ProvinceManagementSection> {
   late Future<List<Map<String, dynamic>>> _countriesFuture;
   String? _selectedCountryId;
   List<Map<String, dynamic>> _allProvinces = [];
@@ -3402,9 +3424,12 @@ class _CrossReferencesSectionState extends State<CrossReferencesSection> {
 }
 
 /// Read-only, deliberately - there's no edit or delete anywhere in this
-/// widget, matching the rule which permits neither for anyone.
-class _AuditLogSection extends StatelessWidget {
-  const _AuditLogSection();
+/// widget, matching the rule which permits neither for anyone. Public
+/// (not the original private _AuditLogSection) so it can also be opened
+/// as its own focused page from the hub, not only reached by scrolling
+/// the old Roles screen below.
+class AuditLogSection extends StatelessWidget {
+  const AuditLogSection();
 
   String _timeAgo(Timestamp? ts) {
     if (ts == null) return '';

@@ -1,4 +1,16 @@
-const functions = require("firebase-functions");
+// Pinned to the /v1 subpath on purpose: every function below is written
+// in the v1 calling convention (onCall's (data, context), firestore
+// triggers via .document(path).onX, pubsub via .schedule().onRun()).
+// firebase-functions v6+ changed the bare `require("firebase-functions")`
+// top-level export to be the v2 API instead (confirmed by inspecting the
+// installed package: v5.x's "main" is lib/v1/index.js, v7.x's is
+// lib/v2/index.js) - importing the plain package name under v7 would
+// silently hand every v1-style handler here a v2 request object instead
+// of (data, context) and break at runtime, not at build time. The /v1
+// subpath still ships the exact same v1 API older versions exposed by
+// default, so this one-line change is what makes the version bump to
+// firebase-functions ^7.4.0 safe without rewriting every function.
+const functions = require("firebase-functions/v1");
 const admin = require("firebase-admin");
 const cheerio = require("cheerio");
 admin.initializeApp();
