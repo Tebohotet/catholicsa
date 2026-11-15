@@ -15,6 +15,31 @@ const admin = require("firebase-admin");
 const cheerio = require("cheerio");
 admin.initializeApp();
 
+// Real, confirmed bug found via `firebase functions:log`: every call to
+// syncFullBible was crashing with "TypeError: admin.firestore is not a
+// function". Root cause - firebase-admin v12+ (we're on 14.5.1) made the
+// bare `require("firebase-admin")` namespace admin-app-only
+// (initializeApp/getApp/etc.); admin.firestore()/.auth()/.storage()/
+// .messaging() are no longer attached to it at all, they only exist via
+// the modular "firebase-admin/firestore" etc. subpath exports. Every
+// function below was written against the old namespaced API
+// (admin.firestore(), admin.firestore.FieldValue, admin.firestore.Timestamp,
+// admin.auth(), admin.storage(), admin.messaging()), so rather than
+// rewrite ~20 call sites to the modular API, this re-attaches the same
+// names/shape to `admin` right after init - a compat shim, not a change
+// in behavior.
+const { getFirestore, FieldValue, Timestamp, FieldPath } = require("firebase-admin/firestore");
+const { getAuth } = require("firebase-admin/auth");
+const { getMessaging } = require("firebase-admin/messaging");
+const { getStorage } = require("firebase-admin/storage");
+admin.firestore = getFirestore;
+admin.firestore.FieldValue = FieldValue;
+admin.firestore.Timestamp = Timestamp;
+admin.firestore.FieldPath = FieldPath;
+admin.auth = getAuth;
+admin.messaging = getMessaging;
+admin.storage = getStorage;
+
 /**
  * Callable from the Settings > Delete Account button.
  * - Anonymises the user's existing comments (keeps the discussion/rating
@@ -1666,4 +1691,4 @@ exports.syncUsccbCitations = functions.runWith({ timeoutSeconds: 540, memory: "5
     failureCount: failures.length,
     failures: failures.slice(0, 30),
   };
-});
+});
