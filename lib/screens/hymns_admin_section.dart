@@ -2,6 +2,8 @@ import 'dart:typed_data';
 import 'package:flutter/material.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:file_picker/file_picker.dart';
+import 'package:shared_preferences/shared_preferences.dart';
+import 'package:audioplayers/audioplayers.dart';
 import '../services/firestore_service.dart';
 import '../services/hymn_conversion_service.dart';
 import '../theme/app_theme.dart';
@@ -40,6 +42,19 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
   // not dart:io), so this check itself never breaks the web build even
   // though the feature it gates does.
   bool get _isWindowsDesktop => !kIsWeb && defaultTargetPlatform == TargetPlatform.windows;
+
+  // Real, confirmed need: these three paths are specific to whatever's
+  // actually installed on this one admin PC - the hardcoded fallbacks
+  // below are only a best guess (and were wrong for both Audiveris and
+  // FluidSynth the first time this was tried for real), so once
+  // someone has typed in the paths that actually work here, they
+  // should stick - not revert to the guess every time the app
+  // restarts. Persisted locally (SharedPreferences, this machine
+  // only), loaded in initState, saved on every edit.
+  static const _kAudiverisPathPref = 'hymnOmrAudiverisPath';
+  static const _kFluidsynthPathPref = 'hymnOmrFluidsynthPath';
+  static const _kSoundfontPathPref = 'hymnOmrSoundfontPath';
+
   final _audiverisPathCtrl = TextEditingController(text: r'C:\Program Files\Audiveris\bin\Audiveris.exe');
   final _fluidsynthPathCtrl = TextEditingController(text: r'C:\Program Files\FluidSynth\bin\fluidsynth.exe');
   final _soundfontPathCtrl = TextEditingController();
@@ -47,13 +62,69 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
   List<String> _lastConversionLog = [];
   String? _lastConversionError;
 
+  // Lets an already-converted hymn be played right from this screen,
+  // next to its Convert/Re-convert button, without re-running the
+  // whole OMR pipeline just to hear it again. Keyed by hymn id;
+  // populated right after a successful conversion, and also probed
+  // from disk on load so a hymn converted in an earlier session still
+  // shows a Play button after an app restart.
+  final AudioPlayer _audioPlayer = AudioPlayer();
+  final Map<String, String> _localAudioPaths = {};
+  String? _playingHymnId;
+
   @override
   void initState() {
     super.initState();
-    _hymnsFuture = FirestoreService().getHymns();
+    _hymnsFuture = _loadHymnsAndProbeAudio();
+    _loadSavedOmrPaths();
+    _audiverisPathCtrl.addListener(() => _saveOmrPath(_kAudiverisPathPref, _audiverisPathCtrl.text));
+    _fluidsynthPathCtrl.addListener(() => _saveOmrPath(_kFluidsynthPathPref, _fluidsynthPathCtrl.text));
+    _soundfontPathCtrl.addListener(() => _saveOmrPath(_kSoundfontPathPref, _soundfontPathCtrl.text));
+    _audioPlayer.onPlayerComplete.listen((_) {
+      if (mounted) setState(() => _playingHymnId = null);
+    });
   }
 
-  void _refresh() => setState(() { _hymnsFuture = FirestoreService().getHymns(); });
+  Future<List<Map<String, dynamic>>> _loadHymnsAndProbeAudio() async {
+    final hymns = await FirestoreService().getHymns();
+    if (_isWindowsDesktop) {
+      for (final h in hymns) {
+        final id = h['id'] as String;
+        final path = await HymnConversionService.localAudioPathIfExists(id);
+        if (path != null) _localAudioPaths[id] = path;
+      }
+    }
+    return hymns;
+  }
+
+  Future<void> _togglePlay(String hymnId, String path) async {
+    if (_playingHymnId == hymnId) {
+      await _audioPlayer.stop();
+      if (mounted) setState(() => _playingHymnId = null);
+      return;
+    }
+    await _audioPlayer.stop();
+    setState(() => _playingHymnId = hymnId);
+    await _audioPlayer.play(DeviceFileSource(path));
+  }
+
+  Future<void> _loadSavedOmrPaths() async {
+    final prefs = await SharedPreferences.getInstance();
+    final audiveris = prefs.getString(_kAudiverisPathPref);
+    final fluidsynth = prefs.getString(_kFluidsynthPathPref);
+    final soundfont = prefs.getString(_kSoundfontPathPref);
+    if (!mounted) return;
+    if (audiveris != null && audiveris.isNotEmpty) _audiverisPathCtrl.text = audiveris;
+    if (fluidsynth != null && fluidsynth.isNotEmpty) _fluidsynthPathCtrl.text = fluidsynth;
+    if (soundfont != null && soundfont.isNotEmpty) _soundfontPathCtrl.text = soundfont;
+  }
+
+  Future<void> _saveOmrPath(String key, String value) async {
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setString(key, value);
+  }
+
+  void _refresh() => setState(() { _hymnsFuture = _loadHymnsAndProbeAudio(); });
 
   Future<void> _convertHymn(Map<String, dynamic> hymn) async {
     if (_soundfontPathCtrl.text.trim().isEmpty) {
@@ -73,6 +144,9 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
       setState(() {
         _lastConversionLog = result.log;
         _lastConversionError = result.success ? null : (result.error ?? 'Conversion failed.');
+        if (result.success && result.localWavPath != null) {
+          _localAudioPaths[id] = result.localWavPath!;
+        }
       });
       if (result.success) _refresh();
     } catch (e) {
@@ -119,8 +193,11 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
               if (hymns.isEmpty) return const SizedBox.shrink();
               return Column(
                 children: hymns.map((h) {
+                  final id = h['id'] as String;
                   final hasAudio = h['hasAudio'] == true;
-                  final isConverting = _convertingHymnId == h['id'];
+                  final isConverting = _convertingHymnId == id;
+                  final localPath = _localAudioPaths[id];
+                  final isPlaying = _playingHymnId == id;
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
@@ -128,10 +205,23 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
                     subtitle: Text(hasAudio ? 'Audio already generated' : 'Not yet converted', style: const TextStyle(fontSize: 11)),
                     trailing: isConverting
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
-                        : OutlinedButton(
-                            style: OutlinedButton.styleFrom(foregroundColor: AppColors.stone, side: const BorderSide(color: AppColors.stone)),
-                            onPressed: _convertingHymnId != null ? null : () => _convertHymn(h),
-                            child: Text(hasAudio ? 'Re-convert' : 'Convert', style: const TextStyle(fontSize: 12)),
+                        : Row(
+                            mainAxisSize: MainAxisSize.min,
+                            children: [
+                              if (localPath != null) ...[
+                                IconButton(
+                                  tooltip: isPlaying ? 'Stop' : 'Play',
+                                  icon: Icon(isPlaying ? Icons.stop_circle_outlined : Icons.play_circle_outline, color: AppColors.stone),
+                                  onPressed: () => _togglePlay(id, localPath),
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              OutlinedButton(
+                                style: OutlinedButton.styleFrom(foregroundColor: AppColors.stone, side: const BorderSide(color: AppColors.stone)),
+                                onPressed: _convertingHymnId != null ? null : () => _convertHymn(h),
+                                child: Text(hasAudio ? 'Re-convert' : 'Convert', style: const TextStyle(fontSize: 12)),
+                              ),
+                            ],
                           ),
                   );
                 }).toList(),
@@ -257,6 +347,15 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
       ],
     );
   }
+
+  @override
+  void dispose() {
+    _audiverisPathCtrl.dispose();
+    _fluidsynthPathCtrl.dispose();
+    _soundfontPathCtrl.dispose();
+    _audioPlayer.dispose();
+    super.dispose();
+  }
 }
 
 class _AddHymnForm extends StatefulWidget {
@@ -369,4 +468,4 @@ class _AddHymnFormState extends State<_AddHymnForm> {
       ),
     );
   }
-}
+}

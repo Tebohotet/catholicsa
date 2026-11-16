@@ -12,9 +12,17 @@ class ConversionResult {
   final bool success;
   final String? audioUrl;
   final String? musicXmlUrl;
+  final String? localWavPath;
   final String? error;
   final List<String> log;
-  const ConversionResult({required this.success, this.audioUrl, this.musicXmlUrl, this.error, required this.log});
+  const ConversionResult({
+    required this.success,
+    this.audioUrl,
+    this.musicXmlUrl,
+    this.localWavPath,
+    this.error,
+    required this.log,
+  });
 }
 
 /// Real implementation - only ever compiled in on native platforms
@@ -76,12 +84,19 @@ class HymnConversionService {
       final mxlFile = mxlFiles.first;
       log.add('Found ${mxlFile.path}');
       if (mxlFiles.length > 1) {
-        log.add('WARNING: Audiveris produced ${mxlFiles.length} .mxl files (it split the score into several movements); only the first is converted: ${mxlFiles.map((f) => p.basename(f.path)).join(', ')}');
+        log.add('Audiveris produced ${mxlFiles.length} .mxl files (it split the score into several movements): ${mxlFiles.map((f) => p.basename(f.path)).join(', ')}. Merging all of them in order so the full piece plays, not just the first movement.');
       }
 
       log.add('Step 2/3: Converting MusicXML -> MIDI...');
-      final mxlBytes = await mxlFile.readAsBytes();
-      final midiBytes = MusicXmlToMidiConverter.convert(mxlBytes);
+      // Real, confirmed cause of hymns cutting off early: when
+      // Audiveris can't merge every page/system into one book, each
+      // one above becomes its own separate .mxl - converting only
+      // mxlFiles.first (the old behaviour) played just that first
+      // movement and then stopped. convertAll reads every .mxl found
+      // and appends them in order, each one starting right where the
+      // last one ended.
+      final mxlBytesList = [for (final f in mxlFiles) await f.readAsBytes()];
+      final midiBytes = MusicXmlToMidiConverter.convertAll(mxlBytesList);
       final midiFile = File(p.join(workDir.path, 'output.mid'));
       await midiFile.writeAsBytes(midiBytes);
       log.add('MIDI written (${midiBytes.length} bytes).');
@@ -109,6 +124,15 @@ class HymnConversionService {
       }
       log.add('WAV synthesized.');
 
+      // Saved to a permanent, predictable spot on this PC (not the
+      // temp workDir, which is wiped in `finally` below no matter what
+      // happens next) so the admin can play it back from the app at
+      // any time afterwards - including if the Storage upload below
+      // fails, or on a future run without reconverting at all.
+      final localPath = await localWavPathFor(hymnId);
+      await wavFile.copy(localPath);
+      log.add('Saved a local copy to $localPath.');
+
       log.add('Uploading results to Firebase Storage...');
       final bucket = FirebaseStorage.instance;
       final wavRef = bucket.ref('hymns/$hymnId.wav');
@@ -128,7 +152,13 @@ class HymnConversionService {
       });
 
       log.add('Done.');
-      return ConversionResult(success: true, audioUrl: audioUrl, musicXmlUrl: musicXmlUrl, log: log);
+      return ConversionResult(
+        success: true,
+        audioUrl: audioUrl,
+        musicXmlUrl: musicXmlUrl,
+        localWavPath: localPath,
+        log: log,
+      );
     } catch (e) {
       log.add('FAILED: $e');
       return ConversionResult(success: false, error: e.toString(), log: log);
@@ -147,5 +177,34 @@ class HymnConversionService {
       throw Exception('Failed to download PDF: HTTP ${response.statusCode}');
     }
     return response.bodyBytes;
+  }
+
+  /// Where a converted hymn's WAV lives permanently on this PC, inside
+  /// the same `Documents\CatholicSA\...` family the user already keeps
+  /// the repo and Bible texts in - deliberately not path_provider's
+  /// app-id-nested application-documents folder, which would be much
+  /// harder for the user to find on disk than a plain, predictable
+  /// path under their own Documents folder.
+  static Future<String> _hymnAudioDir() async {
+    final userProfile = Platform.environment['USERPROFILE'];
+    final docsDir = userProfile != null && userProfile.isNotEmpty
+        ? p.join(userProfile, 'Documents')
+        : (await getApplicationDocumentsDirectory()).path;
+    final dir = Directory(p.join(docsDir, 'CatholicSA', 'HymnAudio'));
+    if (!dir.existsSync()) dir.createSync(recursive: true);
+    return dir.path;
+  }
+
+  static Future<String> localWavPathFor(String hymnId) async {
+    final dir = await _hymnAudioDir();
+    return p.join(dir, '$hymnId.wav');
+  }
+
+  /// Used by the admin screen to decide whether to show a Play button
+  /// for a hymn without re-running the conversion - e.g. after an app
+  /// restart, when a previous session's local copy is still on disk.
+  static Future<String?> localAudioPathIfExists(String hymnId) async {
+    final path = await localWavPathFor(hymnId);
+    return File(path).existsSync() ? path : null;
   }
 }
