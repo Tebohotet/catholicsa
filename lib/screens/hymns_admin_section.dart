@@ -54,6 +54,9 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
   static const _kAudiverisPathPref = 'hymnOmrAudiverisPath';
   static const _kFluidsynthPathPref = 'hymnOmrFluidsynthPath';
   static const _kSoundfontPathPref = 'hymnOmrSoundfontPath';
+  static const _kTempoPref = 'hymnOmrTempoBpm';
+  static const _kInstrumentPref = 'hymnOmrInstrumentProgram';
+  static const _kRepeatPref = 'hymnOmrRepeatCount';
 
   final _audiverisPathCtrl = TextEditingController(text: r'C:\Program Files\Audiveris\bin\Audiveris.exe');
   final _fluidsynthPathCtrl = TextEditingController(text: r'C:\Program Files\FluidSynth\bin\fluidsynth.exe');
@@ -61,6 +64,34 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
   String? _convertingHymnId;
   List<String> _lastConversionLog = [];
   String? _lastConversionError;
+
+  // Real, confirmed gaps found after the first real conversions: a
+  // fixed 120 BPM (hymns are usually sung much slower than that, and
+  // Audiveris essentially never recognizes a printed tempo marking to
+  // use instead), a generic default instrument (no program-change was
+  // ever written, so FluidSynth just falls back to whatever program 0
+  // is on the soundfont - not organ, not voices, not whatever
+  // Audiveris itself guessed in the MusicXML), and only ever playing
+  // one pass through the tune (a short, correct render of a hymn
+  // still sounds "too short" next to the real multi-verse hymn it's
+  // being compared to). All three are now adjustable here rather than
+  // guessed once in code, and persist the same way the three tool
+  // paths above do.
+  final _tempoCtrl = TextEditingController(text: '84');
+  final _repeatCtrl = TextEditingController(text: '1');
+  int _instrumentProgram = 18; // General MIDI program 19 "Church Organ", 0-indexed
+
+  // A short, named subset of General MIDI programs relevant to hymns -
+  // not the full list of 128, which would be unwieldy and mostly
+  // irrelevant here. Values are 0-indexed (raw MIDI program-change
+  // byte), one less than GM's usual 1-128 numbering.
+  static const _instrumentOptions = {
+    18: 'Church Organ',
+    0: 'Acoustic Grand Piano',
+    52: 'Choir Aahs',
+    53: 'Voice Oohs',
+    73: 'Flute',
+  };
 
   // Lets an already-converted hymn be played right from this screen,
   // next to its Convert/Re-convert button, without re-running the
@@ -80,6 +111,8 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
     _audiverisPathCtrl.addListener(() => _saveOmrPath(_kAudiverisPathPref, _audiverisPathCtrl.text));
     _fluidsynthPathCtrl.addListener(() => _saveOmrPath(_kFluidsynthPathPref, _fluidsynthPathCtrl.text));
     _soundfontPathCtrl.addListener(() => _saveOmrPath(_kSoundfontPathPref, _soundfontPathCtrl.text));
+    _tempoCtrl.addListener(() => _saveOmrPath(_kTempoPref, _tempoCtrl.text));
+    _repeatCtrl.addListener(() => _saveOmrPath(_kRepeatPref, _repeatCtrl.text));
     _audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _playingHymnId = null);
     });
@@ -113,15 +146,29 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
     final audiveris = prefs.getString(_kAudiverisPathPref);
     final fluidsynth = prefs.getString(_kFluidsynthPathPref);
     final soundfont = prefs.getString(_kSoundfontPathPref);
+    final tempo = prefs.getString(_kTempoPref);
+    final repeat = prefs.getString(_kRepeatPref);
+    final instrument = prefs.getInt(_kInstrumentPref);
     if (!mounted) return;
     if (audiveris != null && audiveris.isNotEmpty) _audiverisPathCtrl.text = audiveris;
     if (fluidsynth != null && fluidsynth.isNotEmpty) _fluidsynthPathCtrl.text = fluidsynth;
     if (soundfont != null && soundfont.isNotEmpty) _soundfontPathCtrl.text = soundfont;
+    if (tempo != null && tempo.isNotEmpty) _tempoCtrl.text = tempo;
+    if (repeat != null && repeat.isNotEmpty) _repeatCtrl.text = repeat;
+    if (instrument != null && _instrumentOptions.containsKey(instrument)) {
+      setState(() => _instrumentProgram = instrument);
+    }
   }
 
   Future<void> _saveOmrPath(String key, String value) async {
     final prefs = await SharedPreferences.getInstance();
     await prefs.setString(key, value);
+  }
+
+  Future<void> _setInstrument(int program) async {
+    setState(() => _instrumentProgram = program);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setInt(_kInstrumentPref, program);
   }
 
   void _refresh() => setState(() { _hymnsFuture = _loadHymnsAndProbeAudio(); });
@@ -140,7 +187,15 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
         fluidsynthPath: _fluidsynthPathCtrl.text.trim(),
         soundfontPath: _soundfontPathCtrl.text.trim(),
       );
-      final result = await service.convert(hymnId: id, pdfBytes: pdfBytes);
+      final bpm = int.tryParse(_tempoCtrl.text.trim()) ?? 84;
+      final repeatCount = int.tryParse(_repeatCtrl.text.trim()) ?? 1;
+      final result = await service.convert(
+        hymnId: id,
+        pdfBytes: pdfBytes,
+        bpm: bpm,
+        instrumentProgram: _instrumentProgram,
+        repeatCount: repeatCount,
+      );
       setState(() {
         _lastConversionLog = result.log;
         _lastConversionError = result.success ? null : (result.error ?? 'Conversion failed.');
@@ -175,6 +230,38 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
           TextField(controller: _fluidsynthPathCtrl, decoration: const InputDecoration(labelText: 'fluidsynth.exe path', isDense: true)),
           const SizedBox(height: 6),
           TextField(controller: _soundfontPathCtrl, decoration: const InputDecoration(labelText: 'Soundfont (.sf2) path', isDense: true)),
+          const SizedBox(height: 10),
+          Row(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              Expanded(
+                child: TextField(
+                  controller: _tempoCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Tempo (BPM)', isDense: true, helperText: 'Hymns are usually slower than the 120 default most music software assumes.'),
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: DropdownButtonFormField<int>(
+                  value: _instrumentProgram,
+                  decoration: const InputDecoration(labelText: 'Instrument', isDense: true),
+                  items: _instrumentOptions.entries
+                      .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 13))))
+                      .toList(),
+                  onChanged: (v) { if (v != null) _setInstrument(v); },
+                ),
+              ),
+              const SizedBox(width: 10),
+              Expanded(
+                child: TextField(
+                  controller: _repeatCtrl,
+                  keyboardType: TextInputType.number,
+                  decoration: const InputDecoration(labelText: 'Repeat (verses)', isDense: true, helperText: 'Loops the recognized tune this many times.'),
+                ),
+              ),
+            ],
+          ),
           if (_lastConversionError != null)
             Padding(padding: const EdgeInsets.only(top: 8), child: Text(_lastConversionError!, style: const TextStyle(fontSize: 12, color: Colors.redAccent))),
           if (_lastConversionLog.isNotEmpty)
@@ -353,6 +440,8 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
     _audiverisPathCtrl.dispose();
     _fluidsynthPathCtrl.dispose();
     _soundfontPathCtrl.dispose();
+    _tempoCtrl.dispose();
+    _repeatCtrl.dispose();
     _audioPlayer.dispose();
     super.dispose();
   }

@@ -44,6 +44,9 @@ class HymnConversionService {
   Future<ConversionResult> convert({
     required String hymnId,
     required Uint8List pdfBytes,
+    int bpm = 84,
+    int? instrumentProgram,
+    int repeatCount = 1,
   }) async {
     final log = <String>[];
     final tempDir = await getTemporaryDirectory();
@@ -95,11 +98,26 @@ class HymnConversionService {
       // movement and then stopped. convertAll reads every .mxl found
       // and appends them in order, each one starting right where the
       // last one ended.
-      final mxlBytesList = [for (final f in mxlFiles) await f.readAsBytes()];
-      final midiBytes = MusicXmlToMidiConverter.convertAll(mxlBytesList);
+      // repeatCount lets the admin loop the recognized tune several
+      // times (e.g. once per verse) - a technically-complete,
+      // accurate render of a short hymn tune will still sound "too
+      // short" next to the real multi-verse hymn it's compared
+      // against, since nothing here knows how many verses there are.
+      // Reusing convertAll's movement-merge logic for this is free:
+      // repeating the same bytes N times IS just N "movements" that
+      // happen to be identical.
+      final singlePassMxlBytes = [for (final f in mxlFiles) await f.readAsBytes()];
+      final repeatedMxlBytes = [for (var i = 0; i < repeatCount.clamp(1, 20); i++) ...singlePassMxlBytes];
+      final midiBytes = MusicXmlToMidiConverter.convertAll(
+        repeatedMxlBytes,
+        bpm: bpm,
+        instrumentProgram: instrumentProgram,
+      );
       final midiFile = File(p.join(workDir.path, 'output.mid'));
       await midiFile.writeAsBytes(midiBytes);
-      log.add('MIDI written (${midiBytes.length} bytes).');
+      log.add('MIDI written (${midiBytes.length} bytes) at $bpm BPM'
+          '${instrumentProgram != null ? ', instrument program $instrumentProgram' : ''}'
+          '${repeatCount > 1 ? ', repeated $repeatCount times' : ''}.');
 
       log.add('Step 3/3: Synthesizing MIDI -> WAV via FluidSynth...');
       final wavFile = File(p.join(workDir.path, 'output.wav'));
@@ -132,6 +150,16 @@ class HymnConversionService {
       final localPath = await localWavPathFor(hymnId);
       await wavFile.copy(localPath);
       log.add('Saved a local copy to $localPath.');
+
+      // Also kept locally, purely for diagnosing what Audiveris
+      // actually recognized when a converted hymn sounds wrong or cuts
+      // off early - this is the real MusicXML, so its measure/note
+      // count tells you directly whether that's an OMR recognition
+      // problem (too few notes/measures than the real score) rather
+      // than a bug in this converter.
+      final localMxlPath = p.join(p.dirname(localPath), '$hymnId.mxl');
+      await mxlFile.copy(localMxlPath);
+      log.add('Saved the recognized MusicXML to $localMxlPath for inspection.');
 
       log.add('Uploading results to Firebase Storage...');
       final bucket = FirebaseStorage.instance;

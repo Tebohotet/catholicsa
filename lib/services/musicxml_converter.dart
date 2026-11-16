@@ -209,7 +209,7 @@ class MusicXmlToMidiConverter {
     return (quarters * _tpq).round();
   }
 
-  static Uint8List convert(Uint8List mxlBytes) {
+  static Uint8List convert(Uint8List mxlBytes, {int bpm = 84, int? instrumentProgram}) {
     final xmlString = extractMusicXmlFromMxlBytes(mxlBytes);
     // Every part becomes its own simultaneous MIDI track; a part with
     // no sounding notes at all is dropped rather than written out as a
@@ -218,7 +218,7 @@ class MusicXmlToMidiConverter {
     if (parts.isEmpty) {
       throw Exception('No notes were found in the converted score - Audiveris may not have recognized any notation on this page.');
     }
-    return SimpleMidiWriter.write(parts);
+    return SimpleMidiWriter.write(parts, bpm: bpm, instrumentProgram: instrumentProgram);
   }
 
   /// Converts several .mxl files end to end, each one picked up right
@@ -232,12 +232,12 @@ class MusicXmlToMidiConverter {
   /// file: each movement's notes are shifted later in time by the
   /// previous movements' combined length, per track index, so the
   /// piece continues instead of overlapping or restarting from zero.
-  static Uint8List convertAll(List<Uint8List> mxlBytesList) {
+  static Uint8List convertAll(List<Uint8List> mxlBytesList, {int bpm = 84, int? instrumentProgram}) {
     if (mxlBytesList.isEmpty) {
       throw Exception('No MusicXML files to convert.');
     }
     if (mxlBytesList.length == 1) {
-      return convert(mxlBytesList.first);
+      return convert(mxlBytesList.first, bpm: bpm, instrumentProgram: instrumentProgram);
     }
 
     final tracks = <List<MidiNoteEvent>>[];
@@ -271,6 +271,6 @@ class MusicXmlToMidiConverter {
     if (nonEmptyTracks.isEmpty) {
       throw Exception('No notes were found in the converted score - Audiveris may not have recognized any notation on this page.');
     }
-    return SimpleMidiWriter.write(nonEmptyTracks);
+    return SimpleMidiWriter.write(nonEmptyTracks, bpm: bpm, instrumentProgram: instrumentProgram);
   }
 }

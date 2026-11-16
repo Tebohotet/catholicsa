@@ -36,7 +36,25 @@ class SimpleMidiWriter {
   /// all sound together instead of one replacing the others. A single
   /// track produces a format 0 (single-track) file, several produce
   /// format 1 (several, simultaneous).
-  static Uint8List write(List<List<MidiNoteEvent>> tracks) {
+  ///
+  /// [bpm] sets the tempo (real, confirmed problem: a fixed 120 BPM -
+  /// a brisk, almost march-like pace - was previously hardcoded with
+  /// no way to change it; hymns are typically sung much slower, and
+  /// Audiveris essentially never recognizes a printed tempo marking,
+  /// so this has to be adjustable rather than guessed once in code).
+  /// [instrumentProgram] is a General MIDI program number, 0-127
+  /// (0-indexed - note this is one less than the 1-128 numbering
+  /// MusicXML/most instrument lists use); when given, every track gets
+  /// a program-change event before its first note so FluidSynth
+  /// actually voices with that instrument instead of silently falling
+  /// back to the soundfont's default (normally Acoustic Grand Piano on
+  /// MuseScore_General.sf2), regardless of what instrument Audiveris
+  /// itself guessed when exporting the MusicXML.
+  static Uint8List write(
+    List<List<MidiNoteEvent>> tracks, {
+    int bpm = 84,
+    int? instrumentProgram,
+  }) {
     if (tracks.isEmpty) {
       throw ArgumentError('write() needs at least one track of events.');
     }
@@ -51,19 +69,31 @@ class SimpleMidiWriter {
     final full = BytesBuilder();
     full.add(header.toBytes());
     for (final trackEvents in tracks) {
-      full.add(_writeTrack(trackEvents));
+      full.add(_writeTrack(trackEvents, bpm: bpm, instrumentProgram: instrumentProgram));
     }
     return full.toBytes();
   }
 
-  static Uint8List _writeTrack(List<MidiNoteEvent> events) {
+  static Uint8List _writeTrack(
+    List<MidiNoteEvent> events, {
+    required int bpm,
+    required int? instrumentProgram,
+  }) {
     final trackBytes = BytesBuilder();
 
-    // Tempo meta event: 120 BPM = 500000 microseconds per quarter note.
+    // Tempo meta event: microseconds per quarter note = 60,000,000 / bpm.
     // Written into every track (harmless if repeated) so each track is
     // correctly timed on its own, without relying on a separate
     // tempo-only track that other players might not expect.
-    trackBytes.add([0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20]);
+    final microsPerQuarter = (60000000 / bpm.clamp(20, 300)).round();
+    trackBytes.add([0x00, 0xFF, 0x51, 0x03, ..._uint24(microsPerQuarter)]);
+
+    // Program (instrument) change on channel 0, before any notes - same
+    // channel every note-on/off below already uses, so this is the one
+    // instrument that plays for the whole track.
+    if (instrumentProgram != null) {
+      trackBytes.add([0x00, 0xC0, instrumentProgram.clamp(0, 127).toInt()]);
+    }
 
     // Flatten every note into an absolute-time note-on and note-off,
     // then emit them in time order with delta times between them.
@@ -103,6 +133,12 @@ class SimpleMidiWriter {
   }
 
   static List<int> _uint16(int value) => [(value >> 8) & 0xFF, value & 0xFF];
+
+  static List<int> _uint24(int value) => [
+        (value >> 16) & 0xFF,
+        (value >> 8) & 0xFF,
+        value & 0xFF,
+      ];
 
   static List<int> _uint32(int value) => [
         (value >> 24) & 0xFF,
