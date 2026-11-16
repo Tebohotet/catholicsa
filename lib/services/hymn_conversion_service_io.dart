@@ -57,12 +57,27 @@ class HymnConversionService {
         return ConversionResult(success: false, error: 'Audiveris failed - see log.', log: log);
       }
 
-      final mxlFiles = workDir.listSync().whereType<File>().where((f) => f.path.endsWith('.mxl')).toList();
+      // Searched recursively: depending on version, Audiveris writes
+      // its export into a per-book subfolder of -output (e.g.
+      // <workDir>/input/input.mxl) rather than directly into it. A
+      // score it splits into several movements comes out as
+      // input.mvt1.mxl, input.mvt2.mxl, ... - sorted so the first
+      // movement is picked deterministically.
+      final mxlFiles = workDir
+          .listSync(recursive: true)
+          .whereType<File>()
+          .where((f) => f.path.toLowerCase().endsWith('.mxl'))
+          .toList()
+        ..sort((a, b) => a.path.compareTo(b.path));
       if (mxlFiles.isEmpty) {
+        log.add('stdout: ${audiverisResult.stdout}');
         return ConversionResult(success: false, error: 'Audiveris ran without error but produced no .mxl file.', log: log);
       }
       final mxlFile = mxlFiles.first;
       log.add('Found ${mxlFile.path}');
+      if (mxlFiles.length > 1) {
+        log.add('WARNING: Audiveris produced ${mxlFiles.length} .mxl files (it split the score into several movements); only the first is converted: ${mxlFiles.map((f) => p.basename(f.path)).join(', ')}');
+      }
 
       log.add('Step 2/3: Converting MusicXML -> MIDI...');
       final mxlBytes = await mxlFile.readAsBytes();

@@ -1,28 +1,41 @@
 import 'dart:typed_data';
 
-/// One musical note or rest to write into the MIDI file.
+/// One sounding note to write into the MIDI file, placed at an absolute
+/// position in the track rather than "right after the previous note".
+///
+/// Absolute placement is what lets a single track hold chords (several
+/// notes sharing one [startTick]), rests (a gap between one note's end
+/// and the next note's start) and several voices on one staff (notes
+/// that overlap in time) - none of which a purely sequential list of
+/// notes can express.
 class MidiNoteEvent {
-  final int? midiNote; // null means a rest
+  final int midiNote;
+  final int startTick;
   final int durationTicks;
-  const MidiNoteEvent({required this.midiNote, required this.durationTicks});
+  const MidiNoteEvent({
+    required this.midiNote,
+    required this.startTick,
+    required this.durationTicks,
+  });
+
+  int get endTick => startTick + durationTicks;
+
+  @override
+  String toString() => 'MidiNoteEvent(note: $midiNote, start: $startTick, duration: $durationTicks)';
 }
 
-/// Writes a Standard MIDI File - the same approach already tested and
-/// verified working in the Node.js version of this pipeline (confirmed
-/// real MThd/MTrk header bytes and correct note-on data on a real test
-/// file before this was ported). Ported directly rather than relying
-/// on a third-party Dart package whose own correctness couldn't be
+/// Writes a Standard MIDI File. Ported directly rather than relying on
+/// a third-party Dart package whose own correctness couldn't be
 /// independently confirmed.
 class SimpleMidiWriter {
   static const int ticksPerQuarterNote = 480;
 
   /// Writes one track per element of [tracks]. Every track starts at
   /// time zero and is played back simultaneously, so a hymn
-  /// arrangement's separate voices (SATB, or melody + accompaniment)
-  /// all sound together instead of one voice replacing the others.
-  /// A single track still produces the same file as before: format 0
-  /// (single-track) rather than format 1, with everything else
-  /// unchanged - the common single-voice case is untouched.
+  /// arrangement's separate parts (SATB, or melody + accompaniment)
+  /// all sound together instead of one replacing the others. A single
+  /// track produces a format 0 (single-track) file, several produce
+  /// format 1 (several, simultaneous).
   static Uint8List write(List<List<MidiNoteEvent>> tracks) {
     if (tracks.isEmpty) {
       throw ArgumentError('write() needs at least one track of events.');
@@ -31,7 +44,7 @@ class SimpleMidiWriter {
     final header = BytesBuilder();
     header.add('MThd'.codeUnits);
     header.add(_uint32(6)); // header chunk length
-    header.add(_uint16(tracks.length == 1 ? 0 : 1)); // format 0 (single track) or 1 (several, simultaneous)
+    header.add(_uint16(tracks.length == 1 ? 0 : 1));
     header.add(_uint16(tracks.length));
     header.add(_uint16(ticksPerQuarterNote));
 
@@ -52,19 +65,30 @@ class SimpleMidiWriter {
     // tempo-only track that other players might not expect.
     trackBytes.add([0x00, 0xFF, 0x51, 0x03, 0x07, 0xA1, 0x20]);
 
-    for (final event in events) {
-      if (event.midiNote == null) {
-        // A rest is just silence - advance time with no note event.
-        continue;
-      }
-      final note = event.midiNote!;
-      // Note on, channel 0, velocity 100 - delta time 0 (starts immediately
-      // after the previous event's duration elapsed).
-      trackBytes.add(_variableLengthQuantity(0));
-      trackBytes.add([0x90, note, 100]);
-      // Note off after the note's full duration.
-      trackBytes.add(_variableLengthQuantity(event.durationTicks));
-      trackBytes.add([0x80, note, 0]);
+    // Flatten every note into an absolute-time note-on and note-off,
+    // then emit them in time order with delta times between them.
+    final raw = <_RawEvent>[];
+    for (final e in events) {
+      if (e.durationTicks <= 0) continue;
+      raw.add(_RawEvent(e.startTick, false, e.midiNote));
+      raw.add(_RawEvent(e.endTick, true, e.midiNote));
+    }
+    // At the same tick, note-offs go before note-ons: otherwise a
+    // repeated note (same pitch ending and restarting on one tick)
+    // would be switched on and then immediately switched off again.
+    raw.sort((a, b) {
+      final byTick = a.tick.compareTo(b.tick);
+      if (byTick != 0) return byTick;
+      if (a.isOff != b.isOff) return a.isOff ? -1 : 1;
+      return a.note.compareTo(b.note);
+    });
+
+    var lastTick = 0;
+    for (final r in raw) {
+      trackBytes.add(_variableLengthQuantity(r.tick - lastTick));
+      lastTick = r.tick;
+      // Channel 0; note-off sent as 0x80 with velocity 0.
+      trackBytes.add(r.isOff ? [0x80, r.note, 0] : [0x90, r.note, 100]);
     }
 
     // End of track meta event.
@@ -101,4 +125,11 @@ class SimpleMidiWriter {
     }
     return bytes.reversed.toList();
   }
+}
+
+class _RawEvent {
+  final int tick;
+  final bool isOff;
+  final int note;
+  const _RawEvent(this.tick, this.isOff, this.note);
 }
