@@ -220,4 +220,57 @@ class MusicXmlToMidiConverter {
     }
     return SimpleMidiWriter.write(parts);
   }
+
+  /// Converts several .mxl files end to end, each one picked up right
+  /// where the previous one finished - real, confirmed need: Audiveris
+  /// sometimes can't merge every page/system of a hymn into one book
+  /// and exports several separate .mxl files (e.g. input.mvt1.mxl,
+  /// input.mvt2.mxl) instead. Converting only the first of those (the
+  /// old behaviour) played just that one movement and stopped, which is
+  /// exactly why a hymn could come out a few seconds long instead of
+  /// playing start to finish. This merges all of them into one MIDI
+  /// file: each movement's notes are shifted later in time by the
+  /// previous movements' combined length, per track index, so the
+  /// piece continues instead of overlapping or restarting from zero.
+  static Uint8List convertAll(List<Uint8List> mxlBytesList) {
+    if (mxlBytesList.isEmpty) {
+      throw Exception('No MusicXML files to convert.');
+    }
+    if (mxlBytesList.length == 1) {
+      return convert(mxlBytesList.first);
+    }
+
+    final tracks = <List<MidiNoteEvent>>[];
+    var offset = 0;
+
+    for (final mxlBytes in mxlBytesList) {
+      final xmlString = extractMusicXmlFromMxlBytes(mxlBytes);
+      final parts = parseAllParts(xmlString);
+      if (parts.every((events) => events.isEmpty)) continue;
+
+      while (tracks.length < parts.length) {
+        tracks.add(<MidiNoteEvent>[]);
+      }
+
+      var movementEnd = offset;
+      for (var i = 0; i < parts.length; i++) {
+        for (final e in parts[i]) {
+          final shifted = MidiNoteEvent(
+            midiNote: e.midiNote,
+            startTick: e.startTick + offset,
+            durationTicks: e.durationTicks,
+          );
+          tracks[i].add(shifted);
+          if (shifted.endTick > movementEnd) movementEnd = shifted.endTick;
+        }
+      }
+      offset = movementEnd;
+    }
+
+    final nonEmptyTracks = tracks.where((t) => t.isNotEmpty).toList();
+    if (nonEmptyTracks.isEmpty) {
+      throw Exception('No notes were found in the converted score - Audiveris may not have recognized any notation on this page.');
+    }
+    return SimpleMidiWriter.write(nonEmptyTracks);
+  }
 }
