@@ -78,6 +78,6 @@ jobs:
           credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
 
       - name: Deploy to Firebase
-        run: npx firebase-tools deploy --only hosting,functions,firestore:rules,firestore:indexes --project catholicsa-61b87 --non-interactive
+        run: npx firebase-tools deploy --only hosting,functions,firestore:rules,firestore:indexes,storage --project catholicsa-61b87 --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}

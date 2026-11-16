@@ -88,9 +88,19 @@ class HymnConversionService {
 
       log.add('Step 3/3: Synthesizing MIDI -> WAV via FluidSynth...');
       final wavFile = File(p.join(workDir.path, 'output.wav'));
+      // Real, confirmed bug: fluidsynth's own CLI synopsis is
+      // "fluidsynth [options] [SoundFonts] [midifiles]" - every option
+      // (-ni, -F, -r) has to come before the soundfont/midi file
+      // positional arguments, not after. With them after, fluidsynth
+      // stops parsing options once the positional soundfont argument
+      // starts, so "-F" and the wav path were being swallowed as
+      // extra (invalid) positional file arguments instead of being
+      // read as the -F flag's value - confirmed against a real run:
+      // "'-F' is an illegal option at this place, only -b option is
+      // allowed here" / "<output.wav> not a SoundFont or MIDI file".
       final fluidResult = await Process.run(
         fluidsynthPath,
-        ['-ni', soundfontPath, midiFile.path, '-F', wavFile.path, '-r', '44100'],
+        ['-ni', '-F', wavFile.path, '-r', '44100', soundfontPath, midiFile.path],
       );
       log.add('FluidSynth exit code: ${fluidResult.exitCode}');
       if (fluidResult.exitCode != 0 || !wavFile.existsSync()) {
@@ -138,4 +148,4 @@ class HymnConversionService {
     }
     return response.bodyBytes;
   }
-}
+}
