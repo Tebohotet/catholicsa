@@ -1,3 +1,4 @@
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
@@ -19,6 +20,23 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 /// and popped back - and refresh its own data automatically, instead of
 /// staying stale until the whole app is manually reloaded.
 final rootRouteObserver = RouteObserver<ModalRoute<void>>();
+
+/// A church link encoded in the page's starting URL on web - e.g.
+/// `https://catholicsa.co.za/church/<parishId>/<churchId>`, the exact
+/// shape `ShareButton` and the QR code on a church page already
+/// generate. Parsed once, directly from the browser's address bar
+/// (`Uri.base`), rather than through Flutter's own router - this app
+/// has no named routes at all, so without this, a shared link or a
+/// scanned QR code always opened the generic home screen instead of
+/// the church it pointed at, no matter how correct the link itself
+/// looked. `Uri.base` is meaningless on non-web (it reflects the
+/// current working directory there), hence the `kIsWeb` guard.
+(String parishId, String churchId)? _churchLinkFromCurrentUrl() {
+  if (!kIsWeb) return null;
+  final match = RegExp(r'^/church/([^/]+)/([^/]+)/?$').firstMatch(Uri.base.path);
+  if (match == null) return null;
+  return (match.group(1)!, match.group(2)!);
+}
 
 Color _parseHexColor(String hex, Color fallback) {
   try {
@@ -92,6 +110,13 @@ class _RootDecider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // A church link in the starting URL takes priority over onboarding -
+    // someone who followed a shared link or scanned a QR code wants that
+    // church, not a first-run tour.
+    final churchLink = _churchLinkFromCurrentUrl();
+    if (churchLink != null) {
+      return HomeScreen(initialChurchParishId: churchLink.$1, initialChurchId: churchLink.$2);
+    }
     return FutureBuilder<bool>(
       future: _hasSeenOnboarding(),
       builder: (context, snap) {
@@ -102,4 +127,4 @@ class _RootDecider extends StatelessWidget {
       },
     );
   }
-}
+}

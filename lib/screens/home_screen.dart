@@ -5,13 +5,20 @@ import 'readings_screen.dart';
 import 'events_screen.dart';
 import 'shop_screen.dart';
 import 'account_screen.dart';
+import 'church_detail_screen.dart';
 import '../services/notification_service.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../app.dart';
 
 class HomeScreen extends StatefulWidget {
-  const HomeScreen({super.key});
+  // Set only when the app was opened from a church link/QR code (see
+  // app.dart's _churchLinkFromCurrentUrl) - pushes straight to that
+  // church, on top of the Map tab, instead of leaving someone who
+  // followed a link on the plain home screen with no idea it worked.
+  final String? initialChurchParishId;
+  final String? initialChurchId;
+  const HomeScreen({super.key, this.initialChurchParishId, this.initialChurchId});
 
   @override
   State<HomeScreen> createState() => _HomeScreenState();
@@ -37,6 +44,20 @@ class _HomeScreenState extends State<HomeScreen> {
       ));
     });
     _showPendingPopups();
+    _openInitialChurchLinkIfAny();
+  }
+
+  // Runs once, after the first frame, so _navigatorKeys[0] is attached
+  // to an actual Navigator before anything tries to push onto it.
+  void _openInitialChurchLinkIfAny() {
+    final parishId = widget.initialChurchParishId;
+    final churchId = widget.initialChurchId;
+    if (parishId == null || churchId == null) return;
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      _navigatorKeys[0].currentState?.push(MaterialPageRoute(
+        builder: (_) => ChurchDetailScreen(parishId: parishId, churchId: churchId),
+      ));
+    });
   }
 
   // A popup is a genuinely different thing from the SnackBar above - an
@@ -142,4 +163,4 @@ class _HomeScreenState extends State<HomeScreen> {
       ),
     );
   }
-}
+}
