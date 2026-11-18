@@ -140,6 +140,11 @@ class _HymnsScreenState extends ConsumerState<HymnsScreen> with RouteAware {
 
   @override
   Widget build(BuildContext context) {
+    // Same super-admin check the "Edit hymns" button already uses. The
+    // original, un-converted PDF is admin-only: a regular user only ever
+    // gets the instrumental audio (or lyrics text) - never a direct link
+    // to the PDF itself.
+    final isAdmin = ref.watch(isRealSuperAdminProvider).maybeWhen(data: (v) => v, orElse: () => false);
     return Scaffold(
       backgroundColor: AppColors.paper,
       body: SafeArea(
@@ -153,18 +158,12 @@ class _HymnsScreenState extends ConsumerState<HymnsScreen> with RouteAware {
               child: Row(
                 children: [
                   const Expanded(child: Text('Hymns', style: TextStyle(fontFamily: appSerif, fontSize: 26, color: Colors.white))),
-                  Consumer(
-                    builder: (context, ref, _) {
-                      final isSuperAdminAsync = ref.watch(isRealSuperAdminProvider);
-                      final isSuperAdmin = isSuperAdminAsync.maybeWhen(data: (v) => v, orElse: () => false);
-                      if (!isSuperAdmin) return const SizedBox.shrink();
-                      return IconButton(
-                        tooltip: _editMode ? 'Exit edit mode' : 'Edit hymns',
-                        icon: Icon(_editMode ? Icons.edit : Icons.edit_outlined, color: _editMode ? AppColors.brass : Colors.white),
-                        onPressed: () => setState(() => _editMode = !_editMode),
-                      );
-                    },
-                  ),
+                  if (isAdmin)
+                    IconButton(
+                      tooltip: _editMode ? 'Exit edit mode' : 'Edit hymns',
+                      icon: Icon(_editMode ? Icons.edit : Icons.edit_outlined, color: _editMode ? AppColors.brass : Colors.white),
+                      onPressed: () => setState(() => _editMode = !_editMode),
+                    ),
                   FutureBuilder<List<Map<String, dynamic>>>(
                     future: _hymnsFuture,
                     builder: (context, snap) => IconButton(
@@ -238,7 +237,11 @@ class _HymnsScreenState extends ConsumerState<HymnsScreen> with RouteAware {
                               // for a converted hymn at all, which is the
                               // actual protection: the PDF simply isn't
                               // offered as an option here anymore.
-                              showDialog(context: context, builder: (_) => _HymnAudioPlayerDialog(title: h['title'] ?? '', audioUrl: h['audioUrl']));
+                              showDialog(context: context, builder: (_) => _HymnAudioPlayerDialog(
+                                title: h['title'] ?? '',
+                                audioUrl: h['audioUrl'],
+                                pdfUrl: isAdmin ? (h['pdfUrl'] as String? ?? '') : null,
+                              ));
                             } else if (isText) {
                               _showLyrics(h['title'] ?? '', h['lyricsText'] ?? '');
                             } else {
@@ -351,13 +354,15 @@ class _EditHymnDialogState extends State<_EditHymnDialog> {
 }
 
 /// Plays the real, converted audio (WAV, produced server-side by the
-/// PDF -> Audiveris -> MusicXML -> MIDI -> FluidSynth pipeline) - the
-/// user never touches the original PDF at all through this path, which
-/// is the actual point of the whole conversion pipeline.
+/// PDF -> Audiveris -> MusicXML -> MIDI -> FluidSynth pipeline) - a
+/// regular user never touches the original PDF at all through this path.
+/// [pdfUrl] is only ever passed in for an admin (see the isAdmin check at
+/// the call site above), so the "View PDF" button only renders for them.
 class _HymnAudioPlayerDialog extends StatefulWidget {
   final String title;
   final String audioUrl;
-  const _HymnAudioPlayerDialog({required this.title, required this.audioUrl});
+  final String? pdfUrl;
+  const _HymnAudioPlayerDialog({required this.title, required this.audioUrl, this.pdfUrl});
 
   @override
   State<_HymnAudioPlayerDialog> createState() => _HymnAudioPlayerDialogState();
@@ -447,6 +452,18 @@ class _HymnAudioPlayerDialogState extends State<_HymnAudioPlayerDialog> {
               ),
       ),
       actions: [
+        if (widget.pdfUrl != null && widget.pdfUrl!.isNotEmpty)
+          TextButton.icon(
+            icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
+            label: const Text('View PDF'),
+            onPressed: () async {
+              final uri = Uri.parse(widget.pdfUrl!);
+              final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
+              if (!ok && mounted) {
+                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open "${widget.title}".')));
+              }
+            },
+          ),
         TextButton(
           onPressed: () { _player.stop(); Navigator.pop(context); },
           child: const Text('Close'),

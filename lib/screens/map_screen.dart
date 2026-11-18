@@ -90,8 +90,9 @@ class _MapScreenState extends State<MapScreen> {
       // (0,0) is the explicit "GPS not set yet" sentinel - filtered here,
       // once, at the source, rather than needing every downstream usage
       // (pin plotting, directions links, distance sorting) to each
-      // separately guard against it.
-      final gpsFiltered = allChurches.where((c) => !(c.geopoint.latitude == 0 && c.geopoint.longitude == 0)).toList();
+      // separately guard against it. isActive:false (an admin still
+      // confirming the church in person) is filtered the same way.
+      final gpsFiltered = allChurches.where((c) => c.isActive && !(c.geopoint.latitude == 0 && c.geopoint.longitude == 0)).toList();
       final upcomingResults = await Future.wait(
         gpsFiltered.map((c) async {
           final upcoming = await service.getUpcomingServices(c.parishId, c.id, daysAhead: 7);
@@ -897,4 +898,4 @@ class _DailyVerseCard extends StatelessWidget {
       },
     );
   }
-}
+}

@@ -18,6 +18,7 @@ class Church {
   final String verificationStatus; // "unverified" | "verified"
   final int? seatingCapacity;
   final String venueType; // "church" | "venue" - a venue is a school hall, community hall, or similar - Mass held there occasionally, sometimes only once. Same underlying model and features (services, accessibility, capacity, RSVP), deliberately without the weight of full church history/verification, which doesn't apply to a one-off space.
+  final bool isActive; // false = hidden from the public map/lists while an admin is still fixing it up in person - still fully visible and editable from the admin panel. Defaults true so nothing already live disappears the moment this field shipped.
 
   Church({
     required this.id,
@@ -35,6 +36,7 @@ class Church {
     this.verificationStatus = 'unverified',
     this.seatingCapacity,
     this.venueType = 'church',
+    this.isActive = true,
   });
 
   factory Church.fromFirestore(String id, Map<String, dynamic> data) {
@@ -55,6 +57,7 @@ class Church {
       verificationStatus: data['verificationStatus'] as String? ?? 'unverified',
       seatingCapacity: (data['seatingCapacity'] as num?)?.toInt(),
       venueType: data['venueType'] as String? ?? 'church',
+      isActive: data['isActive'] as bool? ?? true,
     );
   }
 
@@ -73,6 +76,7 @@ class Church {
         'verificationStatus': verificationStatus,
         'seatingCapacity': seatingCapacity,
         'venueType': venueType,
+        'isActive': isActive,
       };
 }
 
@@ -145,4 +149,4 @@ class ServiceEntry {
         'language': language,
         'notes': notes,
       };
-}
+}

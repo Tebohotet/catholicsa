@@ -119,7 +119,7 @@ class _ParishDetailScreenState extends State<ParishDetailScreen> {
                         children: [
                           const SectionLabel(numeral: 'I', title: 'Churches'),
                           AsyncSection<List<Church>>(
-                            future: FirestoreService().getChurches(widget.parishId),
+                            future: FirestoreService().getChurches(widget.parishId).then((l) => l.where((c) => c.isActive).toList()),
                             isEmpty: (l) => l.isEmpty,
                             emptyMessage: 'No churches added to this parish yet.',
                             builder: (context, churches) => Column(
@@ -169,4 +169,4 @@ class _ParishDetailScreenState extends State<ParishDetailScreen> {
       ),
     );
   }
-}
+}

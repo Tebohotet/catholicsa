@@ -194,6 +194,49 @@ class FirestoreService {
         .update({'associationsReviewed': reviewed});
   }
 
+  /// Sets the church's real GPS point directly - typically from
+  /// standing inside the actual building and tapping "Use my current
+  /// location" rather than typing coordinates by hand. Separate from
+  /// `updateChurch` so the admin screen doesn't have to re-send name/
+  /// address/etc just to fix the one field that's wrong.
+  Future<void> setChurchGeopoint(String parishId, String churchId, GeoPoint point) async {
+    await _db.collection('parishes').doc(parishId).collection('churches').doc(churchId)
+        .update({'geopoint': point});
+  }
+
+  /// Shows/hides a single church on the public map and church lists,
+  /// without touching anything else about it - stays fully visible and
+  /// editable from the admin panel either way.
+  Future<void> setChurchActive(String parishId, String churchId, bool isActive) async {
+    await _db.collection('parishes').doc(parishId).collection('churches').doc(churchId)
+        .update({'isActive': isActive});
+  }
+
+  /// One-tap "take everything off the public map while I go confirm it
+  /// in person" - sets isActive:false on every church in every parish.
+  /// Parishes themselves are untouched; this only hides individual
+  /// church buildings, and any of them can be switched back on
+  /// one-by-one (or re-run in reverse by calling setChurchActive) once
+  /// it's actually been checked. Firestore batches cap at 500 writes,
+  /// so this chunks if there are ever more churches than that.
+  Future<int> hideAllChurches() async {
+    final parishesSnap = await _db.collection('parishes').get();
+    final refs = <DocumentReference>[];
+    for (final parishDoc in parishesSnap.docs) {
+      final churchesSnap = await parishDoc.reference.collection('churches').get();
+      refs.addAll(churchesSnap.docs.map((d) => d.reference));
+    }
+    for (var i = 0; i < refs.length; i += 500) {
+      final chunk = refs.sublist(i, i + 500 > refs.length ? refs.length : i + 500);
+      final batch = _db.batch();
+      for (final ref in chunk) {
+        batch.update(ref, {'isActive': false});
+      }
+      await batch.commit();
+    }
+    return refs.length;
+  }
+
   /// The actual verification action - deliberately not checked again
   /// here client-side; the rule itself requires isPriestForParish, and
   /// the UI only shows this button once checkVerificationEligibility

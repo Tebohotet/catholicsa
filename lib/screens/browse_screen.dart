@@ -371,7 +371,7 @@ class ChurchListScreen extends StatelessWidget {
               padding: const EdgeInsets.symmetric(horizontal: 16),
               child: CenteredContent(
                 child: FutureBuilder(
-                future: FirestoreService().getChurches(parishId),
+                future: FirestoreService().getChurches(parishId).then((l) => l.where((c) => c.isActive).toList()),
                 builder: (context, snap) {
                   if (snap.hasError) return Text('Error: ${snap.error}');
                   if (!snap.hasData) return const Center(child: CircularProgressIndicator());
