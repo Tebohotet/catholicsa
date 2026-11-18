@@ -33,6 +33,15 @@ String rest({int duration = 2, int voice = 1}) =>
 List<(int, int, int)> simplify(List<MidiNoteEvent> events) =>
     [for (final e in events) (e.midiNote, e.startTick, e.durationTicks)];
 
+Uint8List zip(Map<String, String> files) {
+  final archive = Archive();
+  files.forEach((name, content) {
+    final bytes = utf8.encode(content);
+    archive.addFile(ArchiveFile(name, bytes.length, bytes));
+  });
+  return Uint8List.fromList(ZipEncoder().encode(archive));
+}
+
 void main() {
   group('MusicXmlToMidiConverter.parseAllParts timing', () {
     test('notes follow each other, rests leave a gap of silence', () {
@@ -275,15 +284,6 @@ void main() {
   });
 
   group('MusicXmlToMidiConverter.extractMusicXmlFromMxlBytes', () {
-    Uint8List zip(Map<String, String> files) {
-      final archive = Archive();
-      files.forEach((name, content) {
-        final bytes = utf8.encode(content);
-        archive.addFile(ArchiveFile(name, bytes.length, bytes));
-      });
-      return Uint8List.fromList(ZipEncoder().encode(archive));
-    }
-
     test('uses the rootfile named in META-INF/container.xml, decoded as UTF-8', () {
       final mxl = zip({
         'META-INF/container.xml': '<container><rootfiles><rootfile full-path="score.xml"/></rootfiles></container>',
@@ -342,6 +342,98 @@ void main() {
       ]);
       final body = bytes.sublist(22 + 7);
       expect(body.sublist(0, 8), [0x00, 0x90, 60, 100, 0x00, 0x90, 67, 100]);
+    });
+  });
+
+  group('Per-part instruments', () {
+    // Offset of a track chunk's body: 22 bytes of header + first track
+    // header, then the 7-byte tempo event.
+    List<int> trackBodies(Uint8List bytes) => bytes.sublist(14);
+
+    // Splits a format-1 file into its track bodies (after "MTrk"+length).
+    List<List<int>> tracks(Uint8List bytes) {
+      final out = <List<int>>[];
+      var i = 14;
+      while (i < bytes.length) {
+        final len = (bytes[i + 4] << 24) | (bytes[i + 5] << 16) | (bytes[i + 6] << 8) | bytes[i + 7];
+        out.add(bytes.sublist(i + 8, i + 8 + len));
+        i += 8 + len;
+      }
+      return out;
+    }
+
+    const c4 = MidiNoteEvent(midiNote: 60, startTick: 0, durationTicks: q);
+    const g2 = MidiNoteEvent(midiNote: 43, startTick: 0, durationTicks: q);
+
+    test('each track gets its own program, on its own channel', () {
+      final t = tracks(SimpleMidiWriter.write([[c4], [g2]], instrumentPrograms: [18, 0]));
+      expect(t, hasLength(2));
+      // After the 7-byte tempo event: program change, then note-on.
+      expect(t[0].sublist(7, 14), [0x00, 0xC0, 18, 0x00, 0x90, 60, 100]);
+      expect(t[1].sublist(7, 14), [0x00, 0xC1, 0, 0x00, 0x91, 43, 100]);
+      expect(t[1].sublist(14, 19), [0x83, 0x60, 0x81, 43, 0]);
+    });
+
+    test('a single program applies to every track', () {
+      final t = tracks(SimpleMidiWriter.write([[c4], [g2]], instrumentPrograms: [52]));
+      expect(t[0].sublist(7, 10), [0x00, 0xC0, 52]);
+      expect(t[1].sublist(7, 10), [0x00, 0xC1, 52]);
+    });
+
+    test('no programs: no program change at all', () {
+      final t = tracks(SimpleMidiWriter.write([[c4]]));
+      expect(t[0].sublist(7, 11), [0x00, 0x90, 60, 100]);
+      expect(trackBodies(SimpleMidiWriter.write([[c4]], instrumentPrograms: [])),
+          trackBodies(SimpleMidiWriter.write([[c4]])));
+    });
+
+    test('the percussion channel (10) is never used', () {
+      final channels = [for (var i = 0; i < 16; i++) SimpleMidiWriter.channelForTrack(i)];
+      expect(channels.take(15), [0, 1, 2, 3, 4, 5, 6, 7, 8, 10, 11, 12, 13, 14, 15]);
+      expect(channels, isNot(contains(9)));
+    });
+
+    String twoParts(String part1, String part2) => '''<?xml version="1.0" encoding="UTF-8"?>
+<score-partwise version="3.1">
+  <part-list>
+    <score-part id="P1"><part-name>Soprano Alto</part-name></score-part>
+    <score-part id="P2"><part-name> </part-name></score-part>
+  </part-list>
+  <part id="P1"><measure number="1"><attributes><divisions>2</divisions></attributes>$part1</measure></part>
+  <part id="P2"><measure number="1"><attributes><divisions>2</divisions></attributes>$part2</measure></part>
+</score-partwise>''';
+
+    Uint8List mxl(String xml) => zip({'score.xml': xml});
+
+    test('partNames uses part-name, falling back to "Part N"', () {
+      expect(MusicXmlToMidiConverter.partNames(twoParts('', '')), ['Soprano Alto', 'Part 2']);
+    });
+
+    test('converter maps programs to parts by index', () {
+      final t = tracks(MusicXmlToMidiConverter.convert(
+        mxl(twoParts(note('C', 4), note('G', 2))),
+        instrumentPrograms: [73, 0],
+      ));
+      expect(t[0].sublist(7, 10), [0x00, 0xC0, 73]);
+      expect(t[1].sublist(7, 10), [0x00, 0xC1, 0]);
+    });
+
+    test('an empty part is dropped without shifting later parts\' programs', () {
+      final t = tracks(MusicXmlToMidiConverter.convert(
+        mxl(twoParts(rest(), note('G', 2))),
+        instrumentPrograms: [73, 52],
+      ));
+      expect(t, hasLength(1));
+      expect(t[0].sublist(7, 14), [0x00, 0xC0, 52, 0x00, 0x90, 43, 100]);
+    });
+
+    test('parts past the end of the list reuse its last entry', () {
+      final t = tracks(MusicXmlToMidiConverter.convertAll(
+        [mxl(twoParts(note('C', 4), note('G', 2)))],
+        instrumentPrograms: [18],
+      ));
+      expect(t[0].sublist(7, 10), [0x00, 0xC0, 18]);
+      expect(t[1].sublist(7, 10), [0x00, 0xC1, 18]);
     });
   });
 }

@@ -45,7 +45,7 @@ class HymnConversionService {
     required String hymnId,
     required Uint8List pdfBytes,
     int bpm = 84,
-    int? instrumentProgram,
+    List<int>? instrumentPrograms,
     int repeatCount = 1,
   }) async {
     final log = <String>[];
@@ -111,12 +111,12 @@ class HymnConversionService {
       final midiBytes = MusicXmlToMidiConverter.convertAll(
         repeatedMxlBytes,
         bpm: bpm,
-        instrumentProgram: instrumentProgram,
+        instrumentPrograms: instrumentPrograms,
       );
       final midiFile = File(p.join(workDir.path, 'output.mid'));
       await midiFile.writeAsBytes(midiBytes);
       log.add('MIDI written (${midiBytes.length} bytes) at $bpm BPM'
-          '${instrumentProgram != null ? ', instrument program $instrumentProgram' : ''}'
+          '${instrumentPrograms != null && instrumentPrograms.isNotEmpty ? ', instrument programs by part: ${instrumentPrograms.join(', ')}' : ''}'
           '${repeatCount > 1 ? ', repeated $repeatCount times' : ''}.');
 
       log.add('Step 3/3: Synthesizing MIDI -> WAV via FluidSynth...');
@@ -235,4 +235,24 @@ class HymnConversionService {
     final path = await localWavPathFor(hymnId);
     return File(path).existsSync() ? path : null;
   }
-}
+
+  /// The parts (by name, in order) Audiveris recognized the last time
+  /// this hymn was converted on this PC, read from the locally saved
+  /// .mxl - lets the admin screen offer one instrument per part before
+  /// re-converting. Null when there's no saved .mxl or it can't be
+  /// read. Only the first movement's .mxl is saved, so a hymn that
+  /// Audiveris split into movements is assumed to keep the same parts
+  /// in each (parts past this list fall back to the last instrument).
+  static Future<List<String>?> localPartNamesIfExists(String hymnId) async {
+    final wavPath = await localWavPathFor(hymnId);
+    final mxl = File(p.join(p.dirname(wavPath), '$hymnId.mxl'));
+    if (!mxl.existsSync()) return null;
+    try {
+      final xml = MusicXmlToMidiConverter.extractMusicXmlFromMxlBytes(await mxl.readAsBytes());
+      final names = MusicXmlToMidiConverter.partNames(xml);
+      return names.isEmpty ? null : names;
+    } catch (_) {
+      return null;
+    }
+  }
+}

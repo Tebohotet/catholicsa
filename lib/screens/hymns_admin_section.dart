@@ -104,6 +104,17 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
   final Map<String, String> _localAudioPaths = {};
   String? _playingHymnId;
 
+  // Per-part instruments. A hymn's parts are only known once Audiveris
+  // has run on it, so they're read from the .mxl a previous conversion
+  // saved on this PC; after the first conversion, one dropdown per part
+  // appears under that hymn, and the next Re-convert uses them. A part
+  // the admin hasn't set (null) follows the single Instrument dropdown
+  // above, so nothing changes for an admin who ignores these controls.
+  // Persisted per hymn, this machine only, like the other OMR settings.
+  static const _kPartInstrumentsPrefPrefix = 'hymnOmrPartInstruments_';
+  final Map<String, List<String>> _partNames = {};
+  final Map<String, List<int?>> _partPrograms = {};
+
   @override
   void initState() {
     super.initState();
@@ -126,10 +137,43 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
         final id = h['id'] as String;
         final path = await HymnConversionService.localAudioPathIfExists(id);
         if (path != null) _localAudioPaths[id] = path;
+        await _probePartNames(id);
       }
     }
     return hymns;
   }
+
+  Future<void> _probePartNames(String hymnId) async {
+    final names = await HymnConversionService.localPartNamesIfExists(hymnId);
+    if (names == null) return;
+    final prefs = await SharedPreferences.getInstance();
+    final saved = prefs.getStringList('$_kPartInstrumentsPrefPrefix$hymnId') ?? const [];
+    final programs = <int?>[];
+    for (var i = 0; i < names.length; i++) {
+      final p = i < saved.length ? int.tryParse(saved[i]) : null;
+      programs.add(p != null && _instrumentOptions.containsKey(p) ? p : null);
+    }
+    _partNames[hymnId] = names;
+    _partPrograms[hymnId] = programs;
+  }
+
+  Future<void> _setPartInstrument(String hymnId, int partIndex, int program) async {
+    final programs = _partPrograms[hymnId];
+    if (programs == null || partIndex >= programs.length) return;
+    setState(() => programs[partIndex] = program);
+    final prefs = await SharedPreferences.getInstance();
+    await prefs.setStringList('$_kPartInstrumentsPrefPrefix$hymnId', [for (final p in programs) p?.toString() ?? '']);
+  }
+
+  /// One program per known part (unset parts follow the single
+  /// Instrument dropdown), plus the single dropdown's program once more
+  /// at the end: the converter reuses the last entry for any part past
+  /// the list, so a part Audiveris finds this time but didn't last time
+  /// gets the default instrument rather than its neighbour's.
+  List<int> _programsFor(String hymnId) => [
+        for (final p in _partPrograms[hymnId] ?? const <int?>[]) p ?? _instrumentProgram,
+        _instrumentProgram,
+      ];
 
   Future<void> _togglePlay(String hymnId, String path) async {
     if (_playingHymnId == hymnId) {
@@ -194,9 +238,10 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
         hymnId: id,
         pdfBytes: pdfBytes,
         bpm: bpm,
-        instrumentProgram: _instrumentProgram,
+        instrumentPrograms: _programsFor(id),
         repeatCount: repeatCount,
       );
+      if (result.success) await _probePartNames(id);
       setState(() {
         _lastConversionLog = result.log;
         _lastConversionError = result.success ? null : (result.error ?? 'Conversion failed.');
@@ -287,7 +332,8 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
                   final localPath = _localAudioPaths[id];
                   final isPlaying = _playingHymnId == id;
                   final pdfUrl = h['pdfUrl'] as String? ?? '';
-                  return ListTile(
+                  final partNames = _partNames[id] ?? const <String>[];
+                  final tile = ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     title: Text(h['title'] ?? '', style: const TextStyle(fontSize: 13)),
@@ -320,6 +366,37 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
                               ),
                             ],
                           ),
+                  );
+                  if (partNames.isEmpty) return tile;
+                  final programs = _programsFor(id);
+                  return Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      tile,
+                      Padding(
+                        padding: const EdgeInsets.only(bottom: 8),
+                        child: Wrap(
+                          spacing: 10,
+                          runSpacing: 6,
+                          crossAxisAlignment: WrapCrossAlignment.center,
+                          children: [
+                            const Text('Instrument per part (used on next Re-convert):', style: TextStyle(fontSize: 11, color: Colors.black45)),
+                            for (var i = 0; i < partNames.length; i++)
+                              SizedBox(
+                                width: 220,
+                                child: DropdownButtonFormField<int>(
+                                  value: programs[i],
+                                  decoration: InputDecoration(labelText: '${i + 1}. ${partNames[i]}', isDense: true),
+                                  items: _instrumentOptions.entries
+                                      .map((e) => DropdownMenuItem(value: e.key, child: Text(e.value, style: const TextStyle(fontSize: 13))))
+                                      .toList(),
+                                  onChanged: _convertingHymnId != null ? null : (v) { if (v != null) _setPartInstrument(id, i, v); },
+                                ),
+                              ),
+                          ],
+                        ),
+                      ),
+                    ],
                   );
                 }).toList(),
               );
