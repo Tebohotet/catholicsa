@@ -51,5 +51,20 @@ class HymnConversionService {
     throw UnsupportedError('Hymn conversion only runs on Windows desktop.');
   }
 
+  static Future<String> localMxlPathFor(String hymnId) async {
+    throw UnsupportedError('Hymn conversion only runs on Windows desktop.');
+  }
+
   static Future<String?> localAudioPathIfExists(String hymnId) async => null;
-}
+
+  static Future<bool> hasSavedMxl(String hymnId) async => false;
+
+  Future<ConversionResult> rerenderFromSavedMxl({
+    required String hymnId,
+    int bpm = 84,
+    int? instrumentProgram,
+    int repeatCount = 1,
+  }) async {
+    throw UnsupportedError('Hymn conversion only runs on Windows desktop - this platform can\'t shell out to local tools.');
+  }
+}
