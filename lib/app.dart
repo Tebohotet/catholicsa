@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/landing_screen.dart';
 import 'providers/design_tokens_provider.dart';
 import 'providers/branding_provider.dart';
 import 'widgets/developer_debug_overlay.dart';
@@ -97,11 +98,31 @@ class CatholicSAApp extends ConsumerWidget {
   }
 }
 
-/// Decides once, on cold start, whether this device has seen onboarding
-/// before - checked locally (not tied to a signed-in account) since
-/// onboarding should show before anyone's necessarily signed in at all.
+/// The app's first screen on cold start. A church link in the starting
+/// URL goes straight to that church; otherwise the "About Us" landing
+/// page shows - every time, not just once - followed by the onboarding
+/// check.
 class _RootDecider extends StatelessWidget {
   const _RootDecider();
+
+  @override
+  Widget build(BuildContext context) {
+    // A church link in the starting URL takes priority over the landing
+    // page and onboarding - someone who followed a shared link or scanned
+    // a QR code wants that church, not an introduction or a first-run tour.
+    final churchLink = _churchLinkFromCurrentUrl();
+    if (churchLink != null) {
+      return HomeScreen(initialChurchParishId: churchLink.$1, initialChurchId: churchLink.$2);
+    }
+    return LandingScreen(next: (_) => const _OnboardingDecider());
+  }
+}
+
+/// Decides whether this device has seen onboarding before - checked
+/// locally (not tied to a signed-in account) since onboarding should show
+/// before anyone's necessarily signed in at all.
+class _OnboardingDecider extends StatelessWidget {
+  const _OnboardingDecider();
 
   Future<bool> _hasSeenOnboarding() async {
     final prefs = await SharedPreferences.getInstance();
@@ -110,13 +131,6 @@ class _RootDecider extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    // A church link in the starting URL takes priority over onboarding -
-    // someone who followed a shared link or scanned a QR code wants that
-    // church, not a first-run tour.
-    final churchLink = _churchLinkFromCurrentUrl();
-    if (churchLink != null) {
-      return HomeScreen(initialChurchParishId: churchLink.$1, initialChurchId: churchLink.$2);
-    }
     return FutureBuilder<bool>(
       future: _hasSeenOnboarding(),
       builder: (context, snap) {
@@ -127,4 +141,4 @@ class _RootDecider extends StatelessWidget {
       },
     );
   }
-}
+}
