@@ -453,6 +453,44 @@ class MusicXmlToMidiConverter {
     }
     return SimpleMidiWriter.write(nonEmptyTracks, bpm: bpm, instrumentProgram: instrumentProgram);
   }
+
+  /// Same movement-merging idea as [convertAll], but keeps only the
+  /// first part's notes (see [parseNotes]) and writes them as a single
+  /// monophonic track, with no instrument program - this is the melody
+  /// line handed to a singing-voice synthesizer (OddVoices), not
+  /// something FluidSynth plays. A singer sings one note at a time, so
+  /// the full multi-part instrumental arrangement isn't what's wanted
+  /// here; just the tune.
+  static Uint8List convertAllMelodyOnly(List<Uint8List> mxlBytesList, {int bpm = 84}) {
+    if (mxlBytesList.isEmpty) {
+      throw Exception('No MusicXML files to convert.');
+    }
+
+    final track = <MidiNoteEvent>[];
+    var offset = 0;
+    for (final mxlBytes in mxlBytesList) {
+      final xmlString = extractMusicXmlFromMxlBytes(mxlBytes);
+      final melody = parseNotes(xmlString);
+      if (melody.isEmpty) continue;
+
+      var movementEnd = offset;
+      for (final e in melody) {
+        final shifted = MidiNoteEvent(
+          midiNote: e.midiNote,
+          startTick: e.startTick + offset,
+          durationTicks: e.durationTicks,
+        );
+        track.add(shifted);
+        if (shifted.endTick > movementEnd) movementEnd = shifted.endTick;
+      }
+      offset = movementEnd;
+    }
+
+    if (track.isEmpty) {
+      throw Exception('No melody notes were found to sing - the converted score may not have any notes in its first part.');
+    }
+    return SimpleMidiWriter.write([track], bpm: bpm);
+  }
 }
 
 /// Repeat/jump markings found on one measure (merged across parts).

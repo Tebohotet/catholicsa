@@ -352,4 +352,340 @@ class HymnConversionService {
       }
     }
   }
+
+  /// Adds a real sung-vocal line on top of a hymn's already-rendered
+  /// instrumental audio, using OddVoices (a free, offline singing
+  /// synthesizer - https://gitlab.com/oddvoices/oddvoices). Needs two
+  /// things that must already exist: the MusicXML saved by a previous
+  /// Convert/Re-convert (for the melody notes) and lyrics text typed
+  /// in by an admin - confirmed directly against real hymn PDFs that
+  /// Audiveris's OMR produces zero <lyric> tags, so the actual words
+  /// can't come from the score itself and have to be typed in.
+  ///
+  /// The vocal line and the existing instrumental WAV are mixed into
+  /// one combined WAV (so the hymn still has just one Play button and
+  /// one audio file, same as every other hymn), and that combined WAV
+  /// replaces the instrumental-only one both locally and in Storage -
+  /// running this again (e.g. after fixing a typo in the lyrics) always
+  /// mixes the voice back onto the plain instrumental re-rendered
+  /// fresh from the saved MusicXML, not onto a previous mix, so the
+  /// voice is never doubled up.
+  Future<ConversionResult> addSingingVoice({
+    required String hymnId,
+    required String lyricsText,
+    required String singExePath,
+    required String cmudictPath,
+    required String voiceFilePath,
+    int bpm = 84,
+    int? instrumentProgram,
+    int repeatCount = 1,
+  }) async {
+    final log = <String>[];
+    if (lyricsText.trim().isEmpty) {
+      return ConversionResult(success: false, error: 'Add this hymn\'s lyrics first - OddVoices needs the actual words to sing.', log: log);
+    }
+    final localMxlPath = await localMxlPathFor(hymnId);
+    final mxlFile = File(localMxlPath);
+    if (!mxlFile.existsSync()) {
+      return ConversionResult(
+        success: false,
+        error: 'No saved MusicXML found for this hymn yet - run Convert (or Re-convert) at least once first.',
+        log: ['Expected a file at $localMxlPath - nothing there.'],
+      );
+    }
+
+    final tempDir = await getTemporaryDirectory();
+    final workDir = Directory(p.join(tempDir.path, 'hymn-voice-$hymnId'));
+    if (workDir.existsSync()) workDir.deleteSync(recursive: true);
+    workDir.createSync(recursive: true);
+
+    try {
+      log.add('Step 1/4: Re-rendering the plain instrumental from the saved MusicXML, so the voice mixes onto a fresh copy rather than a previous mix...');
+      final mxlBytes = await mxlFile.readAsBytes();
+      final repeatedMxlBytes = [for (var i = 0; i < repeatCount.clamp(1, 20); i++) mxlBytes];
+      final instrumentalMidiBytes = MusicXmlToMidiConverter.convertAll(
+        repeatedMxlBytes,
+        bpm: bpm,
+        instrumentProgram: instrumentProgram,
+      );
+      final instrumentalMidiFile = File(p.join(workDir.path, 'instrumental.mid'));
+      await instrumentalMidiFile.writeAsBytes(instrumentalMidiBytes);
+      final instrumentalWavFile = File(p.join(workDir.path, 'instrumental.wav'));
+      final fluidResult = await Process.run(
+        fluidsynthPath,
+        ['-ni', '-F', instrumentalWavFile.path, '-r', '44100', soundfontPath, instrumentalMidiFile.path],
+      );
+      log.add('FluidSynth exit code: ${fluidResult.exitCode}');
+      if (fluidResult.exitCode != 0 || !instrumentalWavFile.existsSync()) {
+        log.add('stderr: ${fluidResult.stderr}');
+        return ConversionResult(success: false, error: 'FluidSynth failed re-rendering the instrumental - see log.', log: log);
+      }
+
+      log.add('Step 2/4: Pulling just the melody line out of the saved MusicXML...');
+      final melodyMidiBytes = MusicXmlToMidiConverter.convertAllMelodyOnly(repeatedMxlBytes, bpm: bpm);
+      final melodyMidiFile = File(p.join(workDir.path, 'melody.mid'));
+      await melodyMidiFile.writeAsBytes(melodyMidiBytes);
+      log.add('Melody MIDI written (${melodyMidiBytes.length} bytes).');
+
+      final lyricsFile = File(p.join(workDir.path, 'lyrics.txt'));
+      await lyricsFile.writeAsString(lyricsText.trim());
+
+      log.add('Step 3/4: Singing the melody with OddVoices...');
+      final vocalWavFile = File(p.join(workDir.path, 'vocal.wav'));
+      final singResult = await Process.run(
+        singExePath,
+        [voiceFilePath, cmudictPath, '-m', melodyMidiFile.path, '-l', lyricsFile.path, vocalWavFile.path],
+      );
+      log.add('sing exit code: ${singResult.exitCode}');
+      if (singResult.exitCode != 0 || !vocalWavFile.existsSync()) {
+        log.add('stdout: ${singResult.stdout}');
+        log.add('stderr: ${singResult.stderr}');
+        return ConversionResult(success: false, error: 'OddVoices failed to render the vocal line - see log.', log: log);
+      }
+      log.add('Vocal line synthesized.');
+
+      log.add('Step 4/4: Mixing the vocal line into the instrumental...');
+      final combinedBytes = _mixWavFiles(await instrumentalWavFile.readAsBytes(), await vocalWavFile.readAsBytes());
+      final combinedFile = File(p.join(workDir.path, 'combined.wav'));
+      await combinedFile.writeAsBytes(combinedBytes);
+      log.add('Mixed.');
+
+      final localPath = await localWavPathFor(hymnId);
+      await combinedFile.copy(localPath);
+      log.add('Saved a local copy to $localPath.');
+
+      log.add('Uploading to Firebase Storage...');
+      final bucket = FirebaseStorage.instance;
+      final wavRef = bucket.ref('hymns/$hymnId.wav');
+      await wavRef.putFile(combinedFile, SettableMetadata(contentType: 'audio/wav'));
+      final audioUrl = await wavRef.getDownloadURL();
+
+      log.add('Updating Firestore...');
+      await FirebaseFirestore.instance.collection('hymns').doc(hymnId).update({
+        'audioUrl': audioUrl,
+        'hasAudio': true,
+        'hasVoice': true,
+        'omrConvertedAt': FieldValue.serverTimestamp(),
+      });
+
+      log.add('Done.');
+      return ConversionResult(success: true, audioUrl: audioUrl, localWavPath: localPath, log: log);
+    } catch (e) {
+      log.add('FAILED: $e');
+      return ConversionResult(success: false, error: e.toString(), log: log);
+    } finally {
+      if (workDir.existsSync()) {
+        try {
+          workDir.deleteSync(recursive: true);
+        } catch (_) {}
+      }
+    }
+  }
+
+  /// Mixes two WAV files (an instrumental track and a sung vocal line)
+  /// sample-by-sample into one combined WAV. The two tools that
+  /// produce them aren't guaranteed to agree on sample rate or channel
+  /// count, so the vocal line is resampled/re-channeled to match the
+  /// instrumental rather than assumed identical, and whichever one is
+  /// shorter is padded with silence rather than cutting the longer one
+  /// off early.
+  ///
+  /// Real, confirmed bug from the first real test: OddVoices' own
+  /// output runs much quieter than FluidSynth's (checked directly in
+  /// OddVoices' own source - its WAV writer just writes whatever
+  /// sample values its synthesis produced, with no loudness
+  /// normalization of its own, and the two tools were never going to
+  /// happen to agree). Simply adding the two tracks as-is meant the
+  /// vocal was almost inaudible under the instrumental - "I only hear
+  /// the organ" is exactly what that bug sounds like. Each track is
+  /// now independently normalized to the same peak level before
+  /// summing, so the voice is always actually audible regardless of
+  /// either tool's own internal volume, and the final sum is scaled
+  /// back down if it would otherwise clip.
+  static Uint8List _mixWavFiles(Uint8List instrumentalBytes, Uint8List vocalBytes) {
+    final instrumental = _WavAudio.parse(instrumentalBytes);
+    final vocal = _WavAudio.parse(vocalBytes);
+    final rate = instrumental.sampleRate;
+    final channels = instrumental.channels;
+
+    final a = _normalizePeak(instrumental.resampledTo(rate, channels));
+    final b = _normalizePeak(vocal.resampledTo(rate, channels));
+    final length = a.length > b.length ? a.length : b.length;
+
+    final mixed = List<int>.filled(length, 0);
+    for (var i = 0; i < length; i++) {
+      final sa = i < a.length ? a[i] : 0;
+      final sb = i < b.length ? b[i] : 0;
+      mixed[i] = sa + sb;
+    }
+
+    var peak = 0;
+    for (final s in mixed) {
+      final abs = s < 0 ? -s : s;
+      if (abs > peak) peak = abs;
+    }
+    if (peak > 32767) {
+      final scale = 32767 / peak;
+      for (var i = 0; i < mixed.length; i++) {
+        mixed[i] = (mixed[i] * scale).round();
+      }
+    }
+
+    return _writeWav16(mixed, sampleRate: rate, channels: channels);
+  }
+
+  /// Scales [samples] so its loudest single sample sits at [targetPeak]
+  /// (leaving headroom below 16-bit full scale for the other track
+  /// added on top), leaving silence as silence rather than amplifying
+  /// noise out of nothing.
+  static List<int> _normalizePeak(List<int> samples, {int targetPeak = 24000}) {
+    var peak = 0;
+    for (final s in samples) {
+      final abs = s < 0 ? -s : s;
+      if (abs > peak) peak = abs;
+    }
+    if (peak == 0) return samples;
+    final gain = targetPeak / peak;
+    return [for (final s in samples) (s * gain).round()];
+  }
+
+  static Uint8List _writeWav16(List<int> samples, {required int sampleRate, required int channels}) {
+    final dataSize = samples.length * 2;
+    final byteRate = sampleRate * channels * 2;
+    final blockAlign = channels * 2;
+    final builder = BytesBuilder();
+
+    void u32(int v) => builder.add([v & 0xFF, (v >> 8) & 0xFF, (v >> 16) & 0xFF, (v >> 24) & 0xFF]);
+    void u16(int v) => builder.add([v & 0xFF, (v >> 8) & 0xFF]);
+
+    builder.add('RIFF'.codeUnits);
+    u32(36 + dataSize);
+    builder.add('WAVE'.codeUnits);
+    builder.add('fmt '.codeUnits);
+    u32(16); // fmt chunk size
+    u16(1); // PCM
+    u16(channels);
+    u32(sampleRate);
+    u32(byteRate);
+    u16(blockAlign);
+    u16(16); // bits per sample
+    builder.add('data'.codeUnits);
+    u32(dataSize);
+    for (final s in samples) {
+      final v = s.clamp(-32768, 32767);
+      builder.add([v & 0xFF, (v >> 8) & 0xFF]);
+    }
+    return builder.toBytes();
+  }
+}
+
+/// Minimal, pure-Dart WAV reader - just enough to read the handful of
+/// uncompressed-PCM formats FluidSynth and OddVoices actually produce,
+/// so two WAV files can be mixed without pulling in a third-party
+/// audio package. Anything else (compressed audio, an unsupported bit
+/// depth) throws a clear error rather than silently mixing garbage.
+class _WavAudio {
+  final int sampleRate;
+  final int channels;
+  final List<int> samples; // interleaved, one signed 16-bit-range int per sample per channel
+
+  _WavAudio({required this.sampleRate, required this.channels, required this.samples});
+
+  static _WavAudio parse(Uint8List bytes) {
+    if (bytes.length < 12 || _tag(bytes, 0) != 'RIFF' || _tag(bytes, 8) != 'WAVE') {
+      throw Exception('Not a WAV file (missing RIFF/WAVE header).');
+    }
+    final data = ByteData.sublistView(bytes);
+    int? sampleRate, channels, bitsPerSample, audioFormat;
+    List<int>? samples;
+    var offset = 12;
+    while (offset + 8 <= bytes.length) {
+      final chunkId = _tag(bytes, offset);
+      final chunkSize = data.getUint32(offset + 4, Endian.little);
+      final bodyStart = offset + 8;
+      if (chunkId == 'fmt ') {
+        audioFormat = data.getUint16(bodyStart, Endian.little);
+        channels = data.getUint16(bodyStart + 2, Endian.little);
+        sampleRate = data.getUint32(bodyStart + 4, Endian.little);
+        bitsPerSample = data.getUint16(bodyStart + 14, Endian.little);
+      } else if (chunkId == 'data') {
+        samples = _readSamples(bytes, bodyStart, chunkSize, bitsPerSample ?? 16);
+      }
+      // Chunks are word-aligned: an odd-sized chunk has one pad byte after it.
+      offset = bodyStart + chunkSize + (chunkSize.isOdd ? 1 : 0);
+    }
+    if (sampleRate == null || channels == null || samples == null) {
+      throw Exception('WAV file is missing its fmt or data chunk.');
+    }
+    if (audioFormat != 1 && audioFormat != 3) {
+      // 1 = integer PCM, 3 = IEEE float - anything else (ADPCM etc.) isn't handled.
+      throw Exception('Unsupported WAV audio format code $audioFormat - expected plain PCM.');
+    }
+    return _WavAudio(sampleRate: sampleRate, channels: channels, samples: samples);
+  }
+
+  static String _tag(Uint8List bytes, int offset) => String.fromCharCodes(bytes.sublist(offset, offset + 4));
+
+  static List<int> _readSamples(Uint8List bytes, int start, int length, int bits) {
+    final data = ByteData.sublistView(bytes);
+    final bytesPerSample = (bits / 8).ceil().clamp(1, 4);
+    final count = bytesPerSample == 0 ? 0 : length ~/ bytesPerSample;
+    final out = List<int>.filled(count, 0);
+    for (var i = 0; i < count; i++) {
+      final o = start + i * bytesPerSample;
+      switch (bits) {
+        case 8:
+          out[i] = (bytes[o] - 128) * 256; // unsigned 8-bit -> signed 16-bit range
+        case 16:
+          out[i] = data.getInt16(o, Endian.little);
+        case 24:
+          var v = bytes[o] | (bytes[o + 1] << 8) | (bytes[o + 2] << 16);
+          if (v & 0x800000 != 0) v -= 0x1000000;
+          out[i] = v >> 8; // scale down to 16-bit range
+        case 32:
+          out[i] = data.getInt32(o, Endian.little) >> 16; // scale down to 16-bit range
+        default:
+          throw Exception('Unsupported WAV bit depth: $bits');
+      }
+    }
+    return out;
+  }
+
+  /// Resampled (simple linear interpolation - good enough for mixing
+  /// two already-synthesized tracks, neither of which has content near
+  /// the Nyquist frequency that interpolation would alias) to
+  /// [targetRate] and converted to [targetChannels] (mono averaged
+  /// down from stereo, or duplicated up to stereo).
+  List<int> resampledTo(int targetRate, int targetChannels) {
+    final frameCount = channels == 0 ? 0 : samples.length ~/ channels;
+    final perFrame = List<List<int>>.generate(frameCount, (i) {
+      final frame = [for (var c = 0; c < channels; c++) samples[i * channels + c]];
+      if (targetChannels == channels) return frame;
+      if (targetChannels == 1) {
+        final sum = frame.fold<int>(0, (s, v) => s + v);
+        return [sum ~/ channels];
+      }
+      return List.filled(targetChannels, frame.first);
+    });
+    if (perFrame.isEmpty) return const [];
+
+    if (sampleRate == targetRate) {
+      return perFrame.expand((f) => f).toList();
+    }
+
+    final ratio = targetRate / sampleRate;
+    final outFrames = (perFrame.length * ratio).round();
+    final out = <int>[];
+    for (var i = 0; i < outFrames; i++) {
+      final srcPos = i / ratio;
+      final srcIndex = srcPos.floor().clamp(0, perFrame.length - 1);
+      final frac = srcPos - srcIndex;
+      final a = perFrame[srcIndex];
+      final b = perFrame[(srcIndex + 1).clamp(0, perFrame.length - 1)];
+      for (var c = 0; c < targetChannels; c++) {
+        out.add((a[c] + (b[c] - a[c]) * frac).round());
+      }
+    }
+    return out;
+  }
 }

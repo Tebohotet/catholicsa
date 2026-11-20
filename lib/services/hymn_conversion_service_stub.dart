@@ -67,4 +67,17 @@ class HymnConversionService {
   }) async {
     throw UnsupportedError('Hymn conversion only runs on Windows desktop - this platform can\'t shell out to local tools.');
   }
-}
+
+  Future<ConversionResult> addSingingVoice({
+    required String hymnId,
+    required String lyricsText,
+    required String singExePath,
+    required String cmudictPath,
+    required String voiceFilePath,
+    int bpm = 84,
+    int? instrumentProgram,
+    int repeatCount = 1,
+  }) async {
+    throw UnsupportedError('Hymn conversion only runs on Windows desktop - this platform can\'t shell out to local tools.');
+  }
+}

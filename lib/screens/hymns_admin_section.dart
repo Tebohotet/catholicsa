@@ -58,10 +58,20 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
   static const _kTempoPref = 'hymnOmrTempoBpm';
   static const _kInstrumentPref = 'hymnOmrInstrumentProgram';
   static const _kRepeatPref = 'hymnOmrRepeatCount';
+  // OddVoices (real sung-lyrics voice, optional) - same "this admin's
+  // own PC" persistence pattern as the three tool paths above, since
+  // these are just as specific to wherever OddVoices happens to have
+  // been built on this one machine.
+  static const _kSingPathPref = 'hymnOmrSingExePath';
+  static const _kCmudictPathPref = 'hymnOmrCmudictPath';
+  static const _kVoicePathPref = 'hymnOmrVoiceFilePath';
 
   final _audiverisPathCtrl = TextEditingController(text: r'C:\Program Files\Audiveris\bin\Audiveris.exe');
   final _fluidsynthPathCtrl = TextEditingController(text: r'C:\Program Files\FluidSynth\bin\fluidsynth.exe');
   final _soundfontPathCtrl = TextEditingController();
+  final _singPathCtrl = TextEditingController();
+  final _cmudictPathCtrl = TextEditingController();
+  final _voicePathCtrl = TextEditingController();
   String? _convertingHymnId;
   List<String> _lastConversionLog = [];
   String? _lastConversionError;
@@ -108,6 +118,8 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
   // quick Re-render audio can each show their own spinner and disable
   // only their own button, not the other one too.
   String? _rerenderingHymnId;
+  // Same reasoning, for the "Add singing voice" button.
+  String? _addingVoiceHymnId;
 
   @override
   void initState() {
@@ -119,6 +131,9 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
     _soundfontPathCtrl.addListener(() => _saveOmrPath(_kSoundfontPathPref, _soundfontPathCtrl.text));
     _tempoCtrl.addListener(() => _saveOmrPath(_kTempoPref, _tempoCtrl.text));
     _repeatCtrl.addListener(() => _saveOmrPath(_kRepeatPref, _repeatCtrl.text));
+    _singPathCtrl.addListener(() => _saveOmrPath(_kSingPathPref, _singPathCtrl.text));
+    _cmudictPathCtrl.addListener(() => _saveOmrPath(_kCmudictPathPref, _cmudictPathCtrl.text));
+    _voicePathCtrl.addListener(() => _saveOmrPath(_kVoicePathPref, _voicePathCtrl.text));
     _audioPlayer.onPlayerComplete.listen((_) {
       if (mounted) setState(() => _playingHymnId = null);
     });
@@ -156,12 +171,18 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
     final tempo = prefs.getString(_kTempoPref);
     final repeat = prefs.getString(_kRepeatPref);
     final instrument = prefs.getInt(_kInstrumentPref);
+    final singPath = prefs.getString(_kSingPathPref);
+    final cmudictPath = prefs.getString(_kCmudictPathPref);
+    final voicePath = prefs.getString(_kVoicePathPref);
     if (!mounted) return;
     if (audiveris != null && audiveris.isNotEmpty) _audiverisPathCtrl.text = audiveris;
     if (fluidsynth != null && fluidsynth.isNotEmpty) _fluidsynthPathCtrl.text = fluidsynth;
     if (soundfont != null && soundfont.isNotEmpty) _soundfontPathCtrl.text = soundfont;
     if (tempo != null && tempo.isNotEmpty) _tempoCtrl.text = tempo;
     if (repeat != null && repeat.isNotEmpty) _repeatCtrl.text = repeat;
+    if (singPath != null && singPath.isNotEmpty) _singPathCtrl.text = singPath;
+    if (cmudictPath != null && cmudictPath.isNotEmpty) _cmudictPathCtrl.text = cmudictPath;
+    if (voicePath != null && voicePath.isNotEmpty) _voicePathCtrl.text = voicePath;
     if (instrument != null && _instrumentOptions.containsKey(instrument)) {
       setState(() => _instrumentProgram = instrument);
     }
@@ -258,6 +279,98 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
     }
   }
 
+  /// Lets an admin type or paste a hymn's lyrics in, needed for the
+  /// real singing voice below - confirmed directly against real hymn
+  /// PDFs that Audiveris's OMR extracts zero actual lyric words off
+  /// the page, so there's no way to get them except typing them in.
+  /// Reuses the same `lyricsText` field a text-only hymn already
+  /// stores its words in (see `addHymnWithText`), just on a hymn that
+  /// also has a PDF/audio of its own.
+  Future<void> _editLyrics(Map<String, dynamic> hymn) async {
+    final id = hymn['id'] as String;
+    final ctrl = TextEditingController(text: hymn['lyricsText'] as String? ?? '');
+    final saved = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: Text('Lyrics - ${hymn['title'] ?? ''}'),
+        content: SizedBox(
+          width: 420,
+          child: TextField(
+            controller: ctrl,
+            maxLines: 12,
+            decoration: const InputDecoration(
+              hintText: 'Type or paste the hymn\'s words here, in the order they\'re sung. Needed for "Add singing voice" below - it can\'t read the words off the PDF itself.',
+              border: OutlineInputBorder(),
+            ),
+          ),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save')),
+        ],
+      ),
+    );
+    if (saved == true) {
+      await FirestoreService().updateHymn(id, {'lyricsText': ctrl.text.trim()});
+      _refresh();
+    }
+    ctrl.dispose();
+  }
+
+  /// Renders a real sung-vocal line with OddVoices (free, offline,
+  /// labelled "alpha"/experimental by the tool itself - robotic-sounding
+  /// but genuinely usable, confirmed by ear against the "Air" voice) and
+  /// mixes it onto a freshly re-rendered copy of this hymn's
+  /// instrumental, replacing the hymn's audio with the combined result.
+  Future<void> _addSingingVoice(Map<String, dynamic> hymn) async {
+    final id = hymn['id'] as String;
+    final lyrics = (hymn['lyricsText'] as String? ?? '').trim();
+    if (lyrics.isEmpty) {
+      setState(() { _lastConversionError = 'Add this hymn\'s lyrics first (the lyrics icon below) - OddVoices needs the actual words.'; });
+      return;
+    }
+    if (_singPathCtrl.text.trim().isEmpty || _cmudictPathCtrl.text.trim().isEmpty || _voicePathCtrl.text.trim().isEmpty) {
+      setState(() { _lastConversionError = 'Set the sing.exe, cmudict and voice file paths first (OddVoices section below).'; });
+      return;
+    }
+    if (_soundfontPathCtrl.text.trim().isEmpty) {
+      setState(() { _lastConversionError = 'Set a soundfont (.sf2) path first.'; });
+      return;
+    }
+    setState(() { _addingVoiceHymnId = id; _lastConversionLog = []; _lastConversionError = null; });
+    try {
+      final service = HymnConversionService(
+        audiverisPath: _audiverisPathCtrl.text.trim(),
+        fluidsynthPath: _fluidsynthPathCtrl.text.trim(),
+        soundfontPath: _soundfontPathCtrl.text.trim(),
+      );
+      final bpm = int.tryParse(_tempoCtrl.text.trim()) ?? 84;
+      final repeatCount = int.tryParse(_repeatCtrl.text.trim()) ?? 1;
+      final result = await service.addSingingVoice(
+        hymnId: id,
+        lyricsText: lyrics,
+        singExePath: _singPathCtrl.text.trim(),
+        cmudictPath: _cmudictPathCtrl.text.trim(),
+        voiceFilePath: _voicePathCtrl.text.trim(),
+        bpm: bpm,
+        instrumentProgram: _instrumentProgram,
+        repeatCount: repeatCount,
+      );
+      setState(() {
+        _lastConversionLog = result.log;
+        _lastConversionError = result.success ? null : (result.error ?? 'Adding the voice failed.');
+        if (result.success && result.localWavPath != null) {
+          _localAudioPaths[id] = result.localWavPath!;
+        }
+      });
+      if (result.success) _refresh();
+    } catch (e) {
+      setState(() { _lastConversionError = e.toString(); });
+    } finally {
+      if (mounted) setState(() { _addingVoiceHymnId = null; });
+    }
+  }
+
   Widget _buildWindowsConversionSection() {
     return Container(
       width: double.infinity,
@@ -313,6 +426,18 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
               ),
             ],
           ),
+          const SizedBox(height: 14),
+          const Text('Real singing voice (optional - needs OddVoices built on this PC)', style: TextStyle(fontFamily: appSerif, fontSize: 13)),
+          const Text(
+            'Free, offline singing-voice synthesizer (https://gitlab.com/oddvoices/oddvoices) - sounds rough/robotic (it labels itself "alpha") but genuinely works. Needs each hymn\'s lyrics typed in below, since Audiveris can\'t read sung words off the PDF.',
+            style: TextStyle(fontSize: 11, color: Colors.black45),
+          ),
+          const SizedBox(height: 8),
+          TextField(controller: _singPathCtrl, decoration: const InputDecoration(labelText: 'sing.exe path (cpp\\build\\Release\\sing.exe)', isDense: true)),
+          const SizedBox(height: 6),
+          TextField(controller: _cmudictPathCtrl, decoration: const InputDecoration(labelText: 'cmudict-0.7b path', isDense: true)),
+          const SizedBox(height: 6),
+          TextField(controller: _voicePathCtrl, decoration: const InputDecoration(labelText: 'Voice file path (e.g. air.voice)', isDense: true)),
           if (_lastConversionError != null)
             Padding(padding: const EdgeInsets.only(top: 8), child: Text(_lastConversionError!, style: const TextStyle(fontSize: 12, color: Colors.redAccent))),
           if (_lastConversionLog.isNotEmpty)
@@ -335,16 +460,27 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
                   final hasAudio = h['hasAudio'] == true;
                   final isConverting = _convertingHymnId == id;
                   final isRerendering = _rerenderingHymnId == id;
+                  final isAddingVoice = _addingVoiceHymnId == id;
                   final canRerender = _hasSavedMxl.contains(id);
                   final localPath = _localAudioPaths[id];
                   final isPlaying = _playingHymnId == id;
                   final pdfUrl = h['pdfUrl'] as String? ?? '';
+                  final hasLyrics = (h['lyricsText'] as String? ?? '').trim().isNotEmpty;
+                  final hasVoice = h['hasVoice'] == true;
+                  final anyBusy = _convertingHymnId != null || _rerenderingHymnId != null || _addingVoiceHymnId != null;
                   return ListTile(
                     contentPadding: EdgeInsets.zero,
                     dense: true,
                     title: Text(h['title'] ?? '', style: const TextStyle(fontSize: 13)),
-                    subtitle: Text(hasAudio ? 'Audio already generated' : 'Not yet converted', style: const TextStyle(fontSize: 11)),
-                    trailing: (isConverting || isRerendering)
+                    subtitle: Text(
+                      hasVoice
+                          ? 'Audio generated - with a sung voice'
+                          : hasAudio
+                              ? 'Audio already generated'
+                              : 'Not yet converted',
+                      style: const TextStyle(fontSize: 11),
+                    ),
+                    trailing: (isConverting || isRerendering || isAddingVoice)
                         ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                         : Row(
                             mainAxisSize: MainAxisSize.min,
@@ -357,6 +493,12 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
                                 ),
                                 const SizedBox(width: 4),
                               ],
+                              IconButton(
+                                tooltip: hasLyrics ? 'Edit lyrics' : 'Add lyrics (needed for the singing voice)',
+                                icon: Icon(Icons.lyrics_outlined, color: hasLyrics ? AppColors.sage : AppColors.stone),
+                                onPressed: () => _editLyrics(h),
+                              ),
+                              const SizedBox(width: 4),
                               if (localPath != null) ...[
                                 IconButton(
                                   tooltip: isPlaying ? 'Stop' : 'Play',
@@ -368,14 +510,22 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
                               if (canRerender) ...[
                                 OutlinedButton(
                                   style: OutlinedButton.styleFrom(foregroundColor: AppColors.brass, side: const BorderSide(color: AppColors.brass)),
-                                  onPressed: (_convertingHymnId != null || _rerenderingHymnId != null) ? null : () => _rerenderHymn(h),
+                                  onPressed: anyBusy ? null : () => _rerenderHymn(h),
                                   child: const Text('Re-render audio', style: TextStyle(fontSize: 12)),
+                                ),
+                                const SizedBox(width: 4),
+                              ],
+                              if (canRerender && hasAudio && hasLyrics) ...[
+                                OutlinedButton(
+                                  style: OutlinedButton.styleFrom(foregroundColor: AppColors.sage, side: const BorderSide(color: AppColors.sage)),
+                                  onPressed: anyBusy ? null : () => _addSingingVoice(h),
+                                  child: Text(hasVoice ? 'Re-add voice' : 'Add singing voice', style: const TextStyle(fontSize: 12)),
                                 ),
                                 const SizedBox(width: 4),
                               ],
                               OutlinedButton(
                                 style: OutlinedButton.styleFrom(foregroundColor: AppColors.stone, side: const BorderSide(color: AppColors.stone)),
-                                onPressed: (_convertingHymnId != null || _rerenderingHymnId != null) ? null : () => _convertHymn(h),
+                                onPressed: anyBusy ? null : () => _convertHymn(h),
                                 child: Text(hasAudio ? 'Re-convert' : 'Convert', style: const TextStyle(fontSize: 12)),
                               ),
                             ],
@@ -510,6 +660,9 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
     _audiverisPathCtrl.dispose();
     _fluidsynthPathCtrl.dispose();
     _soundfontPathCtrl.dispose();
+    _singPathCtrl.dispose();
+    _cmudictPathCtrl.dispose();
+    _voicePathCtrl.dispose();
     _tempoCtrl.dispose();
     _repeatCtrl.dispose();
     _audioPlayer.dispose();
