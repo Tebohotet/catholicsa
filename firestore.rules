@@ -83,20 +83,37 @@ service cloud.firestore {
     // getOrdersForChurch, getMyProducts, national course/product search,
     // and the church search index) - every one of them was silently
     // broken until these were added.
+    // Each of these used to be one `allow read: if A || B || C;` line.
+    // Split into one `allow read` statement per condition - still the
+    // exact same OR (multiple allow statements for the same operation
+    // are combined with OR, same as before), but this is the shape
+    // Firebase's own docs recommend for collection-group/list queries:
+    // its query validator checks each `allow` statement on its own, so
+    // a query whose own where() clauses already prove ONE statement
+    // true (e.g. status == 'approved') can be let through on that
+    // statement alone, without needing to also reason about a sibling
+    // statement that calls isSuperAdmin()/isParishAdmin() (those need
+    // get()/exists() lookups unrelated to the query's own filters).
+    // Candidate fix for the "permission-denied opening any user's
+    // profile, even your own" bug - see PROJECT_STATUS.md.
     match /{path=**}/donations/{donationId} {
-      allow read: if isSuperAdmin() || isParishAdmin(resource.data.parishId) ||
-        (isSignedIn() && resource.data.donorId == request.auth.uid);
+      allow read: if isSignedIn() && resource.data.donorId == request.auth.uid;
+      allow read: if isSuperAdmin();
+      allow read: if isParishAdmin(resource.data.parishId);
     }
     match /{path=**}/orders/{orderId} {
-      allow read: if isSuperAdmin() || isParishAdmin(resource.data.parishId) ||
-        (isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.sellerId == request.auth.uid));
+      allow read: if isSignedIn() && (resource.data.buyerId == request.auth.uid || resource.data.sellerId == request.auth.uid);
+      allow read: if isSuperAdmin();
+      allow read: if isParishAdmin(resource.data.parishId);
     }
     match /{path=**}/products/{productId} {
-      allow read: if isSuperAdmin() || resource.data.status == 'approved' ||
-        (isSignedIn() && resource.data.sellerId == request.auth.uid);
+      allow read: if resource.data.status == 'approved';
+      allow read: if isSignedIn() && resource.data.sellerId == request.auth.uid;
+      allow read: if isSuperAdmin();
     }
     match /{path=**}/courses/{courseId} {
-      allow read: if isSuperAdmin() || resource.data.status == 'published';
+      allow read: if resource.data.status == 'published';
+      allow read: if isSuperAdmin();
     }
     match /{path=**}/churches/{churchId} {
       allow read: if true;
