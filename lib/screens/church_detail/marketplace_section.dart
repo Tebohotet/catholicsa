@@ -10,9 +10,10 @@ import '../../theme/app_theme.dart';
 import '../../widgets/async_section.dart';
 import '../../widgets/verified_name.dart';
 
-/// Phase 1 marketplace, deliberately scoped: listings and a way to reach
-/// the seller directly, nothing more. No payment collection, no escrow -
-/// see the earlier design conversation for exactly why that boundary is
+/// Listings, a way to reach the seller, and checkout - bank deposit by
+/// default, or straight to PayFast when the parish has it configured
+/// (see PurchaseDialog._placeOrder below). Still no escrow - see the
+/// earlier design conversation for exactly why that boundary is
 /// intentional, not a missing feature waiting to be added carelessly.
 class MarketplaceSection extends StatefulWidget {
   final String parishId;
@@ -328,10 +329,13 @@ class _ListItemDialogState extends State<_ListItemDialog> {
   }
 }
 
-/// Two steps in one dialog: place the order (quantity, coupon, buyer
-/// details), then - only for bank_deposit, the one method available while
-/// there's no real checkout - show where to pay and let them attach proof
-/// once they have. Admin approves from the Marketplace Orders section.
+/// Place the order (quantity, coupon, buyer details), then either hand
+/// straight off to PayFast (parish has it configured - see _placeOrder)
+/// or, for the platform default/PayPal/PayStack, show where to pay by
+/// bank deposit and let the buyer attach proof once they have, same as
+/// before. The admin still approves bank-deposit orders from the
+/// Marketplace Orders section; PayFast orders approve themselves once
+/// payfastNotify confirms the payment.
 class PurchaseDialog extends StatefulWidget {
   final String parishId;
   final String churchId;
@@ -430,6 +434,25 @@ class _PurchaseDialogState extends State<PurchaseDialog> {
         refundPercent: (widget.product['refundPercent'] as num?)?.toDouble() ?? 0,
         sellerHasOwnGateway: provider != 'platform',
       );
+      if (provider == 'payfast') {
+        // Real online checkout - hand straight off to PayFast, no local
+        // "upload proof of payment" step needed here. Whether the payment
+        // actually went through is decided server-side by the ITN webhook
+        // (payfastNotify in functions/index.js), not by this screen - the
+        // buyer sees it reflected in My Orders once that lands.
+        final url = await FirestoreService().createPayfastPayment(
+          parishId: widget.parishId, churchId: widget.churchId,
+          productId: widget.product['id'], orderId: orderId,
+        );
+        if (mounted) {
+          final messenger = ScaffoldMessenger.of(context);
+          Navigator.pop(context);
+          messenger.showSnackBar(const SnackBar(content: Text('Opening PayFast to complete your payment…')));
+          await launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication);
+        }
+        return;
+      }
+
       final bank = await FirestoreService().getBankDetails(widget.parishId);
       if (mounted) setState(() { _orderId = orderId; _bankDetails = bank; _placingOrder = false; });
     } catch (e) {

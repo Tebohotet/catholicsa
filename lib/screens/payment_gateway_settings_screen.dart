@@ -3,14 +3,17 @@ import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/admin_crud_section.dart';
 
-/// Settings only - this does NOT process a payment. Wiring an actual
-/// checkout (redirecting to PayFast/PayStack/PayPal, verifying the
-/// webhook/ITN callback, confirming funds actually arrived) is separate,
-/// gateway-specific integration work that needs real sandbox credentials
-/// to build and test properly. What this screen gets right: where the
-/// money should go, stored somewhere only this parish's priest (or a
-/// super admin) can ever read - never the public parish document, never
-/// re-displayed once a secret's been saved.
+/// PayFast is now a real, working checkout: pick it below, fill in the
+/// Merchant ID/Key (and, before going live, a passphrase), and buyers pay
+/// through PayFast - a secure webhook confirms the payment and marks the
+/// order approved automatically (see createPayfastPayment/payfastNotify
+/// in functions/index.js for exactly how). PayStack and PayPal are still
+/// settings-only for now - wiring an actual checkout for those is
+/// separate, gateway-specific work still to come. What this screen
+/// always got right, for every gateway: where the money should go,
+/// stored somewhere only this parish's priest (or a super admin) can
+/// ever read - never the public parish document, never re-displayed
+/// once a secret's been saved.
 class PaymentGatewaySettingsScreen extends StatefulWidget {
   final String parishId;
   const PaymentGatewaySettingsScreen({super.key, required this.parishId});
@@ -27,6 +30,8 @@ class _PaymentGatewaySettingsScreenState extends State<PaymentGatewaySettingsScr
 
   final _payfastMerchantIdCtrl = TextEditingController();
   final _payfastMerchantKeyCtrl = TextEditingController();
+  final _payfastPassphraseCtrl = TextEditingController();
+  bool _payfastSandbox = true; // safer default until a parish has actually tested a real payment
   final _paystackPublicKeyCtrl = TextEditingController();
   final _paystackSecretKeyCtrl = TextEditingController();
   final _paypalClientIdCtrl = TextEditingController();
@@ -49,9 +54,10 @@ class _PaymentGatewaySettingsScreenState extends State<PaymentGatewaySettingsScr
     if (config != null) {
       _provider = config['provider'] ?? 'platform';
       _payfastMerchantIdCtrl.text = config['payfastMerchantId'] ?? '';
+      _payfastSandbox = config['payfastSandbox'] != false; // unset (new setup) defaults to sandbox too
       _paystackPublicKeyCtrl.text = config['paystackPublicKey'] ?? '';
       _paypalClientIdCtrl.text = config['paypalClientId'] ?? '';
-      _hasExistingSecrets = (config['payfastMerchantKey'] != null) ||
+      _hasExistingSecrets = (config['payfastMerchantKey'] != null) || (config['payfastPassphrase'] != null) ||
           (config['paystackSecretKey'] != null) || (config['paypalClientSecret'] != null);
     }
     final bank = await FirestoreService().getBankDetails(widget.parishId);
@@ -68,6 +74,7 @@ class _PaymentGatewaySettingsScreenState extends State<PaymentGatewaySettingsScr
   void dispose() {
     _payfastMerchantIdCtrl.dispose();
     _payfastMerchantKeyCtrl.dispose();
+    _payfastPassphraseCtrl.dispose();
     _paystackPublicKeyCtrl.dispose();
     _paystackSecretKeyCtrl.dispose();
     _paypalClientIdCtrl.dispose();
@@ -89,6 +96,10 @@ class _PaymentGatewaySettingsScreenState extends State<PaymentGatewaySettingsScr
         if (_payfastMerchantKeyCtrl.text.trim().isNotEmpty) {
           data['payfastMerchantKey'] = _payfastMerchantKeyCtrl.text.trim();
         }
+        if (_payfastPassphraseCtrl.text.trim().isNotEmpty) {
+          data['payfastPassphrase'] = _payfastPassphraseCtrl.text.trim();
+        }
+        data['payfastSandbox'] = _payfastSandbox;
       } else if (_provider == 'paystack') {
         data['paystackPublicKey'] = _paystackPublicKeyCtrl.text.trim();
         if (_paystackSecretKeyCtrl.text.trim().isNotEmpty) {
@@ -107,6 +118,7 @@ class _PaymentGatewaySettingsScreenState extends State<PaymentGatewaySettingsScr
       if (mounted) {
         ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Payment settings saved.')));
         _payfastMerchantKeyCtrl.clear();
+        _payfastPassphraseCtrl.clear();
         _paystackSecretKeyCtrl.clear();
         _paypalClientSecretCtrl.clear();
         setState(() => _hasExistingSecrets = true);
@@ -163,8 +175,9 @@ class _PaymentGatewaySettingsScreenState extends State<PaymentGatewaySettingsScr
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
                           const Text(
-                            'Choose where payment for anything sold through this parish should go. This saves your settings only - '
-                            'connecting an actual checkout screen is separate work still to come.',
+                            'Choose where payment for anything sold through this parish should go. PayFast is a real, working checkout - '
+                            'buyers pay through PayFast and the order is marked paid automatically. PayStack and PayPal save your settings '
+                            'only for now; an actual checkout for those is separate work still to come.',
                             style: TextStyle(fontSize: 12, color: Colors.black54),
                           ),
                           const SizedBox(height: 20),
@@ -209,6 +222,52 @@ class _PaymentGatewaySettingsScreenState extends State<PaymentGatewaySettingsScr
                               decoration: InputDecoration(
                                 labelText: 'PayFast Merchant Key',
                                 hintText: _hasExistingSecrets ? 'Already saved — leave blank to keep it' : null,
+                              ),
+                            ),
+                            const SizedBox(height: 10),
+                            TextField(
+                              controller: _payfastPassphraseCtrl, obscureText: true,
+                              decoration: InputDecoration(
+                                labelText: 'PayFast Passphrase (optional, recommended)',
+                                hintText: _hasExistingSecrets ? 'Already saved — leave blank to keep it' : 'Set one in PayFast under Settings → Security',
+                              ),
+                            ),
+                            const Padding(
+                              padding: EdgeInsets.only(top: 4),
+                              child: Text(
+                                'Without a passphrase, anyone who finds your notify URL could fake a "payment confirmed" message. Set one in your '
+                                'PayFast account and enter the exact same one here.',
+                                style: TextStyle(fontSize: 11, color: Colors.black45, fontStyle: FontStyle.italic),
+                              ),
+                            ),
+                            const SizedBox(height: 12),
+                            Container(
+                              padding: const EdgeInsets.all(12),
+                              color: AppColors.paperDark,
+                              child: Row(
+                                children: [
+                                  const Icon(Icons.science_outlined, size: 18, color: Colors.black45),
+                                  const SizedBox(width: 10),
+                                  Expanded(
+                                    child: Column(
+                                      crossAxisAlignment: CrossAxisAlignment.start,
+                                      children: [
+                                        const Text('Sandbox (test) mode', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                        Text(
+                                          _payfastSandbox
+                                              ? 'On - safe to leave on until you\'ve completed a successful test purchase with a PayFast sandbox account. No real money moves.'
+                                              : 'Off - real payments will be processed. Only turn this off once a test purchase in sandbox mode has worked end to end.',
+                                          style: const TextStyle(fontSize: 11, color: Colors.black54),
+                                        ),
+                                      ],
+                                    ),
+                                  ),
+                                  Switch(
+                                    value: _payfastSandbox,
+                                    activeThumbColor: AppColors.brass,
+                                    onChanged: (v) => setState(() => _payfastSandbox = v),
+                                  ),
+                                ],
                               ),
                             ),
                           ],

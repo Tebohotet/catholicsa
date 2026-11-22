@@ -23,6 +23,7 @@ export 'marketplace_admin_service.dart';
 export 'community_search_service.dart';
 export 'church_checkin_service.dart';
 export 'messaging_service.dart';
+export 'marketplace_payment_service.dart';
 
 /// "Where to look" for search - national is the original full scan,
 /// everything else resolves to a real scoped query rather than filtering

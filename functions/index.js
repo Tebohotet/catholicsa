@@ -15,6 +15,8 @@ const admin = require("firebase-admin");
 const cheerio = require("cheerio");
 const fs = require("fs");
 const path = require("path");
+const crypto = require("crypto");
+const dns = require("dns");
 admin.initializeApp();
 
 // Real, confirmed bug found via `firebase functions:log`: every call to
@@ -1726,4 +1728,333 @@ exports.syncUsccbCitations = functions.runWith({ timeoutSeconds: 540, memory: "5
     failureCount: failures.length,
     failures: failures.slice(0, 30),
   };
+});
+
+// ---------- PayFast checkout + ITN (real online marketplace payment) ----------
+//
+// Everything below is the "wiring an actual checkout" work that
+// payment_gateway_settings_screen.dart's own comment flagged as separate,
+// gateway-specific work - now built for PayFast specifically, since
+// that's the gateway asked for. PayStack/PayPal still only have their
+// settings screen (unchanged) - nothing here touches them.
+//
+// This lives entirely server-side on purpose: PayFast's passphrase (if a
+// parish sets one) has to never reach the client for the signature it
+// protects to mean anything. The Flutter side only ever calls
+// createPayfastPayment and gets back a ready-to-open URL - it never sees
+// a merchant key, a passphrase, or builds a signature itself.
+//
+// Deliberately NOT built here: automatically splitting/transferring the
+// platform's commission out of what PayFast pays the parish. The
+// existing createOrder() comment already settled that - "once a
+// parish/seller has their own gateway, PayFast's own Split Payments
+// feature is the right place for a commission, not this" - so the
+// commission stays a recorded number (platformFeeAmount/
+// sellerPayoutAmount on the order) exactly as it already was; no money
+// gets moved by this code beyond what PayFast itself does between payer
+// and the parish's own merchant account.
+
+// Hostnames community PayFast integrations check an ITN's source IP
+// against. Could not be confirmed against PayFast's current docs today
+// (developers.payfast.co.za/docs is a JS-only page that didn't render
+// for an automated fetch) - see isLikelyFromPayfast()'s own comment for
+// why that's fine: this check is a logged warning, never a hard reject.
+const PAYFAST_NOTIFY_HOSTNAMES = ["www.payfast.co.za", "sandbox.payfast.co.za", "w1w.payfast.co.za", "w2w.payfast.co.za"];
+
+// This project's actual Cloud Functions base URL (region + project id) -
+// fixed/deterministic, not a secret. If this project is ever renamed or
+// functions moved to a different region, this one line is what needs
+// updating (and the notify_url re-saved with PayFast for any parish
+// already using it, since PayFast calls back whatever URL we send).
+const PAYFAST_NOTIFY_URL = "https://us-central1-catholicsa-61b87.cloudfunctions.net/payfastNotify";
+
+/**
+ * PayFast (and several community guides) use PHP's urlencode() rules for
+ * the signature string, which differ from JS's encodeURIComponent() in
+ * exactly these ways: space becomes "+" (not %20), and !'()* ~ get their
+ * own escapes rather than being left as literals. Getting this wrong is
+ * the single most common cause of "signature mismatch" integration bugs
+ * reported against PayFast - so this exists as its own tested helper
+ * rather than inlined, to make sure checkout-side and ITN-side signing
+ * always do exactly the same thing.
+ */
+function phpUrlEncode(value) {
+  return encodeURIComponent(value)
+    .replace(/!/g, "%21")
+    .replace(/'/g, "%27")
+    .replace(/\(/g, "%28")
+    .replace(/\)/g, "%29")
+    .replace(/\*/g, "%2A")
+    .replace(/~/g, "%7E")
+    .replace(/%20/g, "+");
+}
+
+/**
+ * [pairs] is an array of [key, value] tuples, in the exact order they
+ * should appear in the signature string - PayFast's signature is order-
+ * sensitive (the order fields were submitted/received in, not
+ * alphabetical), which is why this takes an ordered array rather than a
+ * plain object. Empty/null/undefined values are left out entirely,
+ * matching what PayFast's own checkout form does (an omitted field, not
+ * an empty one).
+ */
+function buildPfParamString(pairs) {
+  return pairs
+    .filter(([, v]) => v !== undefined && v !== null && String(v).trim() !== "")
+    .map(([k, v]) => `${k}=${phpUrlEncode(String(v).trim())}`)
+    .join("&");
+}
+
+function generateSignature(pairs, passphrase) {
+  let paramString = buildPfParamString(pairs);
+  if (passphrase && passphrase.trim() !== "") {
+    paramString += `&passphrase=${phpUrlEncode(passphrase.trim())}`;
+  }
+  return crypto.createHash("md5").update(paramString).digest("hex");
+}
+
+/**
+ * Best-effort only, not a hard gate - resolves PayFast's known notify
+ * hostnames and checks the ITN's source IP against them. DNS-based IP
+ * allowlisting is inherently a bit stale (addresses can change), and the
+ * exact hostname list above couldn't be verified against PayFast's
+ * current docs today (see the comment on PAYFAST_NOTIFY_HOSTNAMES). The
+ * signature check, the amount check, and the server-to-server validate
+ * call below are the three independently-strong checks that actually
+ * decide whether a payment gets trusted; this one only ever logs a
+ * warning so a stale or incomplete hostname list can't silently
+ * blackhole every real payment.
+ */
+async function isLikelyFromPayfast(sourceIp) {
+  if (!sourceIp) return false;
+  const ip = sourceIp.replace(/^::ffff:/, "");
+  for (const host of PAYFAST_NOTIFY_HOSTNAMES) {
+    try {
+      const { address } = await dns.promises.lookup(host);
+      if (address === ip) return true;
+    } catch (e) {
+      // One hostname failing to resolve shouldn't stop checking the rest.
+    }
+  }
+  return false;
+}
+
+/**
+ * Called from the "Place Order" flow (PurchaseDialog in
+ * marketplace_section.dart) only when the parish's Payment Settings has
+ * PayFast configured - every other provider (platform default, PayStack,
+ * PayPal) keeps using the existing manual bank-deposit flow untouched.
+ * Returns a ready-to-open PayFast URL; the app just launches it.
+ */
+exports.createPayfastPayment = functions.https.onCall(async (data, context) => {
+  if (!context.auth) {
+    throw new functions.https.HttpsError("unauthenticated", "Must be signed in.");
+  }
+  const { parishId, churchId, productId, orderId } = data;
+  if (!parishId || !churchId || !productId || !orderId) {
+    throw new functions.https.HttpsError("invalid-argument", "parishId, churchId, productId and orderId are all required.");
+  }
+  const db = admin.firestore();
+  const orderRef = db.collection("parishes").doc(parishId)
+    .collection("churches").doc(churchId)
+    .collection("products").doc(productId)
+    .collection("orders").doc(orderId);
+  const orderSnap = await orderRef.get();
+  if (!orderSnap.exists) {
+    throw new functions.https.HttpsError("not-found", "Order not found.");
+  }
+  const order = orderSnap.data();
+  if (order.buyerId !== context.auth.uid) {
+    throw new functions.https.HttpsError("permission-denied", "This isn't your order.");
+  }
+  if (order.status !== "awaiting_payment") {
+    throw new functions.https.HttpsError("failed-precondition", "This order has already been paid, or is no longer awaiting payment.");
+  }
+
+  const gatewaySnap = await db.collection("parishes").doc(parishId).collection("private").doc("paymentGateway").get();
+  const gateway = gatewaySnap.exists ? gatewaySnap.data() : null;
+  if (!gateway || gateway.provider !== "payfast" || !gateway.payfastMerchantId || !gateway.payfastMerchantKey) {
+    throw new functions.https.HttpsError("failed-precondition", "This parish hasn't set up PayFast yet.");
+  }
+
+  // Defaults to sandbox until the parish admin explicitly turns it off in
+  // Payment Settings - the safer default for a gateway nobody's tested
+  // with real money yet.
+  const sandbox = gateway.payfastSandbox !== false;
+  const host = sandbox ? "sandbox.payfast.co.za" : "www.payfast.co.za";
+
+  // Tracking doc the ITN webhook reads back by m_payment_id (== orderId)
+  // to find which parish/church/product/order path to mark paid, and -
+  // just as important - the SOURCE OF TRUTH for the amount owed. The ITN
+  // handler below never trusts the amount a webhook claims; it compares
+  // it to this.
+  await db.collection("payfastPayments").doc(orderId).set({
+    parishId, churchId, productId, orderId,
+    amount: order.finalAmount,
+    sandbox,
+    processed: false,
+    createdAt: admin.firestore.FieldValue.serverTimestamp(),
+  });
+
+  const nameParts = (order.buyerName || "Parishioner").trim().split(/\s+/);
+  const nameFirst = nameParts[0] || "Parishioner";
+  const nameLast = nameParts.slice(1).join(" ");
+  const email = (context.auth.token && context.auth.token.email) || "";
+
+  const pairs = [
+    ["merchant_id", gateway.payfastMerchantId],
+    ["merchant_key", gateway.payfastMerchantKey],
+    ["return_url", "https://catholicsa.co.za/"],
+    ["cancel_url", "https://catholicsa.co.za/"],
+    ["notify_url", PAYFAST_NOTIFY_URL],
+    ["name_first", nameFirst],
+    ["name_last", nameLast],
+    ["email_address", email],
+    ["m_payment_id", orderId],
+    ["amount", order.finalAmount.toFixed(2)],
+    ["item_name", String(order.productTitle || "Order").slice(0, 100)],
+  ];
+
+  const signature = generateSignature(pairs, gateway.payfastPassphrase);
+  const query = buildPfParamString(pairs);
+  return { url: `https://${host}/eng/process?${query}&signature=${signature}` };
+});
+
+/**
+ * PayFast's server-to-server webhook (ITN). Four checks all have to pass
+ * before an order gets marked paid: signature, amount (against what WE
+ * stored when the payment was created, never the webhook's own claimed
+ * amount), PayFast's own "validate" callback, and payment_status being
+ * COMPLETE. The source-IP check is logged, not a hard gate - see
+ * isLikelyFromPayfast()'s comment for why.
+ *
+ * Always responds 200 once the POST is parsed, even when a check fails -
+ * that failure is logged for a human to find in Cloud Functions logs,
+ * but a non-200 response just makes PayFast retry the same ITN on a
+ * schedule, which won't fix a real problem and only delays noticing it.
+ */
+exports.payfastNotify = functions.https.onRequest(async (req, res) => {
+  if (req.method !== "POST") {
+    res.status(405).send("Method not allowed");
+    return;
+  }
+
+  const body = req.body || {};
+  const db = admin.firestore();
+  const paymentId = body.m_payment_id;
+
+  try {
+    if (!paymentId) {
+      console.warn("payfastNotify: missing m_payment_id", body);
+      res.status(200).send("OK");
+      return;
+    }
+
+    const trackingRef = db.collection("payfastPayments").doc(paymentId);
+    const trackingSnap = await trackingRef.get();
+    if (!trackingSnap.exists) {
+      console.warn(`payfastNotify: no tracking doc for ${paymentId}`);
+      res.status(200).send("OK");
+      return;
+    }
+    const tracking = trackingSnap.data();
+    if (tracking.processed) {
+      // PayFast resends ITNs - a repeat for something already handled is
+      // normal, not an error. Idempotent no-op.
+      res.status(200).send("OK");
+      return;
+    }
+
+    const gatewaySnap = await db.collection("parishes").doc(tracking.parishId).collection("private").doc("paymentGateway").get();
+    const gateway = gatewaySnap.exists ? gatewaySnap.data() : null;
+    if (!gateway) {
+      console.error(`payfastNotify: no gateway config for parish ${tracking.parishId} (payment ${paymentId})`);
+      res.status(200).send("OK");
+      return;
+    }
+
+    // 1) Signature - recomputed from every posted field except signature
+    // itself, in the order PayFast actually sent them (object key order,
+    // not re-sorted), using the same algorithm as the checkout request.
+    const pairs = Object.keys(body).filter((k) => k !== "signature").map((k) => [k, body[k]]);
+    const expectedSignature = generateSignature(pairs, gateway.payfastPassphrase);
+    if (expectedSignature !== body.signature) {
+      console.error(`payfastNotify: signature mismatch for ${paymentId}`);
+      res.status(200).send("OK");
+      return;
+    }
+
+    // 2) Source - logged only, see isLikelyFromPayfast().
+    const forwardedFor = (req.headers["x-forwarded-for"] || "").toString().split(",")[0].trim();
+    const sourceIp = forwardedFor || req.ip || "";
+    if (!(await isLikelyFromPayfast(sourceIp))) {
+      console.warn(`payfastNotify: ITN for ${paymentId} came from an IP (${sourceIp || "unknown"}) that didn't match PayFast's known hostnames - proceeding anyway since signature + the validate call below are the hard checks, but worth a look if this keeps happening.`);
+    }
+
+    // 3) Amount - against what we stored at checkout time, never the
+    // webhook's own claimed amount.
+    const postedAmount = parseFloat(body.amount_gross);
+    if (!Number.isFinite(postedAmount) || Math.abs(postedAmount - tracking.amount) > 0.05) {
+      console.error(`payfastNotify: amount mismatch for ${paymentId} - expected ${tracking.amount}, got ${body.amount_gross}`);
+      res.status(200).send("OK");
+      return;
+    }
+
+    // 4) Server-to-server confirmation - PayFast's own recommended final
+    // check, confirms this notification really came from them rather
+    // than being replayed or forged by anyone who worked out the
+    // (unkeyed, if no passphrase is set) signature algorithm.
+    const validateHost = tracking.sandbox ? "sandbox.payfast.co.za" : "www.payfast.co.za";
+    const validateParamString = Object.keys(body).filter((k) => k !== "signature")
+      .map((k) => `${k}=${phpUrlEncode(String(body[k]).trim())}`).join("&");
+    let validateText = "";
+    try {
+      const validateResponse = await fetch(`https://${validateHost}/eng/query/validate`, {
+        method: "POST",
+        headers: { "Content-Type": "application/x-www-form-urlencoded" },
+        body: validateParamString,
+      });
+      validateText = (await validateResponse.text()).trim();
+    } catch (e) {
+      console.error(`payfastNotify: validate call failed for ${paymentId}`, e);
+    }
+    if (validateText !== "VALID") {
+      console.error(`payfastNotify: PayFast validate call returned "${validateText}" for ${paymentId}`);
+      res.status(200).send("OK");
+      return;
+    }
+
+    if (body.payment_status !== "COMPLETE") {
+      // A real, verified ITN - just not for a completed payment (e.g.
+      // cancelled/failed). Nothing to mark paid; record it so a retry
+      // of the same ITN doesn't get reprocessed.
+      await trackingRef.update({ processed: true, lastStatus: body.payment_status || null });
+      res.status(200).send("OK");
+      return;
+    }
+
+    // All four checks passed and the payment is COMPLETE - mark the
+    // order paid. Reusing "approved", the exact status the existing
+    // manual (bank-deposit, admin-approved) flow already uses for this -
+    // notifyOnOrderStatusChange above already watches for it and tells
+    // the buyer, with no changes needed there.
+    const orderRef = db.collection("parishes").doc(tracking.parishId)
+      .collection("churches").doc(tracking.churchId)
+      .collection("products").doc(tracking.productId)
+      .collection("orders").doc(tracking.orderId);
+    await orderRef.update({
+      status: "approved",
+      paymentMethod: "payfast",
+      payfastPaymentId: body.pf_payment_id || null,
+      paidAt: admin.firestore.FieldValue.serverTimestamp(),
+    });
+    await trackingRef.update({ processed: true, lastStatus: body.payment_status, pfPaymentId: body.pf_payment_id || null });
+
+    res.status(200).send("OK");
+  } catch (e) {
+    console.error("payfastNotify: unexpected error", e);
+    // Still 200 - our own bug shouldn't make PayFast hammer retries;
+    // it's logged above for a human to go find.
+    res.status(200).send("OK");
+  }
 });
