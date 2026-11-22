@@ -42,18 +42,26 @@ class SimpleMidiWriter {
   /// no way to change it; hymns are typically sung much slower, and
   /// Audiveris essentially never recognizes a printed tempo marking,
   /// so this has to be adjustable rather than guessed once in code).
-  /// [instrumentProgram] is a General MIDI program number, 0-127
+  /// [instrumentPrograms] are General MIDI program numbers, 0-127
   /// (0-indexed - note this is one less than the 1-128 numbering
-  /// MusicXML/most instrument lists use); when given, every track gets
-  /// a program-change event before its first note so FluidSynth
-  /// actually voices with that instrument instead of silently falling
-  /// back to the soundfont's default (normally Acoustic Grand Piano on
-  /// MuseScore_General.sf2), regardless of what instrument Audiveris
-  /// itself guessed when exporting the MusicXML.
+  /// MusicXML/most instrument lists use), one per track, by index:
+  /// track `i` gets a program-change event to `instrumentPrograms[i]`
+  /// before its first note so FluidSynth actually voices it with that
+  /// instrument instead of silently falling back to the soundfont's
+  /// default (normally Acoustic Grand Piano on MuseScore_General.sf2),
+  /// regardless of what instrument Audiveris itself guessed when
+  /// exporting the MusicXML. A track past the end of the list reuses
+  /// the list's last entry, so a single-element list gives every track
+  /// the same instrument. Null or empty: no program change at all.
+  ///
+  /// Every track plays on its own MIDI channel ([channelForTrack]) -
+  /// a program change applies to a whole channel, not a track, so if
+  /// two tracks shared one channel the later program change would
+  /// silently re-voice both of them.
   static Uint8List write(
     List<List<MidiNoteEvent>> tracks, {
     int bpm = 84,
-    int? instrumentProgram,
+    List<int>? instrumentPrograms,
   }) {
     if (tracks.isEmpty) {
       throw ArgumentError('write() needs at least one track of events.');
@@ -68,15 +76,29 @@ class SimpleMidiWriter {
 
     final full = BytesBuilder();
     full.add(header.toBytes());
-    for (final trackEvents in tracks) {
-      full.add(_writeTrack(trackEvents, bpm: bpm, instrumentProgram: instrumentProgram));
+    for (var i = 0; i < tracks.length; i++) {
+      final program = (instrumentPrograms == null || instrumentPrograms.isEmpty)
+          ? null
+          : instrumentPrograms[i < instrumentPrograms.length ? i : instrumentPrograms.length - 1];
+      full.add(_writeTrack(tracks[i], bpm: bpm, channel: channelForTrack(i), instrumentProgram: program));
     }
     return full.toBytes();
+  }
+
+  /// MIDI channel (0-15) for track [trackIndex]. Channel 9 (General
+  /// MIDI channel 10) is reserved for percussion - any program change
+  /// on it is ignored and notes play as drum sounds - so it's skipped.
+  /// With more than 15 tracks (never seen in a hymn) channels are
+  /// reused, and tracks sharing a channel share its instrument.
+  static int channelForTrack(int trackIndex) {
+    final c = trackIndex % 15;
+    return c >= 9 ? c + 1 : c;
   }
 
   static Uint8List _writeTrack(
     List<MidiNoteEvent> events, {
     required int bpm,
+    required int channel,
     required int? instrumentProgram,
   }) {
     final trackBytes = BytesBuilder();
@@ -88,11 +110,11 @@ class SimpleMidiWriter {
     final microsPerQuarter = (60000000 / bpm.clamp(20, 300)).round();
     trackBytes.add([0x00, 0xFF, 0x51, 0x03, ..._uint24(microsPerQuarter)]);
 
-    // Program (instrument) change on channel 0, before any notes - same
-    // channel every note-on/off below already uses, so this is the one
-    // instrument that plays for the whole track.
+    // Program (instrument) change before any notes, on the same channel
+    // every note-on/off below uses, so this is the one instrument that
+    // plays for the whole track.
     if (instrumentProgram != null) {
-      trackBytes.add([0x00, 0xC0, instrumentProgram.clamp(0, 127).toInt()]);
+      trackBytes.add([0x00, 0xC0 | channel, instrumentProgram.clamp(0, 127).toInt()]);
     }
 
     // Flatten every note into an absolute-time note-on and note-off,
@@ -117,8 +139,8 @@ class SimpleMidiWriter {
     for (final r in raw) {
       trackBytes.add(_variableLengthQuantity(r.tick - lastTick));
       lastTick = r.tick;
-      // Channel 0; note-off sent as 0x80 with velocity 0.
-      trackBytes.add(r.isOff ? [0x80, r.note, 0] : [0x90, r.note, 100]);
+      // Note-off sent as 0x80 with velocity 0.
+      trackBytes.add(r.isOff ? [0x80 | channel, r.note, 0] : [0x90 | channel, r.note, 100]);
     }
 
     // End of track meta event.

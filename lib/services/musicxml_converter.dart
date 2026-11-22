@@ -389,16 +389,32 @@ class MusicXmlToMidiConverter {
     return (quarters * _tpq).round();
   }
 
-  static Uint8List convert(Uint8List mxlBytes, {int bpm = 84, int? instrumentProgram}) {
-    final xmlString = extractMusicXmlFromMxlBytes(mxlBytes);
-    // Every part becomes its own simultaneous MIDI track; a part with
-    // no sounding notes at all is dropped rather than written out as a
-    // dead empty track.
-    final parts = parseAllParts(xmlString).where((events) => events.isNotEmpty).toList();
-    if (parts.isEmpty) {
-      throw Exception('No notes were found in the converted score - Audiveris may not have recognized any notation on this page.');
+  /// [instrumentPrograms] are General MIDI programs (0-indexed), one
+  /// per `<part>` in document order - the same order [parseAllParts]
+  /// and [partNames] use. A part past the end of the list reuses its
+  /// last entry, so `[18]` voices every part as Church Organ. Programs
+  /// stay attached to their own part even when an earlier part has no
+  /// notes and is dropped from the MIDI file.
+  static Uint8List convert(Uint8List mxlBytes, {int bpm = 84, List<int>? instrumentPrograms}) {
+    return convertAll([mxlBytes], bpm: bpm, instrumentPrograms: instrumentPrograms);
+  }
+
+  /// The display name of every `<part>`, in document order (index `i`
+  /// here is part `i` everywhere else in this class). Taken from the
+  /// part-list's `<part-name>` (Audiveris writes names like "Piano" or
+  /// "Voice"), falling back to "Part N" when it's missing or blank.
+  static List<String> partNames(String xmlString) {
+    final doc = XmlDocument.parse(xmlString);
+    final names = <String, String>{};
+    for (final sp in doc.findAllElements('score-part')) {
+      final id = sp.getAttribute('id');
+      final name = sp.getElement('part-name')?.innerText.trim() ?? '';
+      if (id != null && name.isNotEmpty) names[id] = name;
     }
-    return SimpleMidiWriter.write(parts, bpm: bpm, instrumentProgram: instrumentProgram);
+    final parts = doc.findAllElements('part').toList();
+    return [
+      for (var i = 0; i < parts.length; i++) names[parts[i].getAttribute('id')] ?? 'Part ${i + 1}',
+    ];
   }
 
   /// Converts several .mxl files end to end, each one picked up right
@@ -412,12 +428,10 @@ class MusicXmlToMidiConverter {
   /// file: each movement's notes are shifted later in time by the
   /// previous movements' combined length, per track index, so the
   /// piece continues instead of overlapping or restarting from zero.
-  static Uint8List convertAll(List<Uint8List> mxlBytesList, {int bpm = 84, int? instrumentProgram}) {
+  /// [instrumentPrograms] works as in [convert], by part index.
+  static Uint8List convertAll(List<Uint8List> mxlBytesList, {int bpm = 84, List<int>? instrumentPrograms}) {
     if (mxlBytesList.isEmpty) {
       throw Exception('No MusicXML files to convert.');
-    }
-    if (mxlBytesList.length == 1) {
-      return convert(mxlBytesList.first, bpm: bpm, instrumentProgram: instrumentProgram);
     }
 
     final tracks = <List<MidiNoteEvent>>[];
@@ -447,11 +461,17 @@ class MusicXmlToMidiConverter {
       offset = movementEnd;
     }
 
-    final nonEmptyTracks = tracks.where((t) => t.isNotEmpty).toList();
-    if (nonEmptyTracks.isEmpty) {
+    // A part with no sounding notes at all is dropped rather than
+    // written out as a dead empty track - its program goes with it, so
+    // every remaining part keeps the instrument chosen for it.
+    final nonEmpty = [for (var i = 0; i < tracks.length; i++) if (tracks[i].isNotEmpty) i];
+    if (nonEmpty.isEmpty) {
       throw Exception('No notes were found in the converted score - Audiveris may not have recognized any notation on this page.');
     }
-    return SimpleMidiWriter.write(nonEmptyTracks, bpm: bpm, instrumentProgram: instrumentProgram);
+    final programs = (instrumentPrograms == null || instrumentPrograms.isEmpty)
+        ? null
+        : [for (final i in nonEmpty) instrumentPrograms[i < instrumentPrograms.length ? i : instrumentPrograms.length - 1]];
+    return SimpleMidiWriter.write([for (final i in nonEmpty) tracks[i]], bpm: bpm, instrumentPrograms: programs);
   }
 
   /// Same movement-merging idea as [convertAll], but keeps only the

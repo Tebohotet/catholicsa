@@ -37,7 +37,7 @@ class HymnConversionService {
     required String hymnId,
     required Uint8List pdfBytes,
     int bpm = 84,
-    int? instrumentProgram,
+    List<int>? instrumentPrograms,
     int repeatCount = 1,
   }) async {
     throw UnsupportedError('Hymn conversion only runs on Windows desktop - this platform can\'t shell out to local tools.');
@@ -80,4 +80,6 @@ class HymnConversionService {
   }) async {
     throw UnsupportedError('Hymn conversion only runs on Windows desktop - this platform can\'t shell out to local tools.');
   }
-}
+
+  static Future<List<String>?> localPartNamesIfExists(String hymnId) async => null;
+}
