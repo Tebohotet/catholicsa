@@ -30,7 +30,12 @@ class UserProfileScreen extends StatelessWidget {
           future: Future.wait([
             service.getUserDoc(uid),
             service.getParishesUserAdministers(uid),
-            service.getMyProducts(uid),
+            // Not getMyProducts - that one's only safe to call for your
+            // OWN uid (see its own doc comment for the permission-denied
+            // bug this fixes: it used to be called here for whichever
+            // profile was open, which broke for anyone who isn't a
+            // super admin viewing someone else's page).
+            service.getApprovedProductsForSeller(uid),
             service.getUserCheckInSummary(uid),
           ]),
           builder: (context, snap) {
@@ -41,7 +46,7 @@ class UserProfileScreen extends StatelessWidget {
 
             final user = snap.data![0] as Map<String, dynamic>?;
             final currentRoles = snap.data![1] as List<Map<String, dynamic>>;
-            final products = (snap.data![2] as List<Map<String, dynamic>>).where((p) => p['status'] == 'approved').toList();
+            final products = snap.data![2] as List<Map<String, dynamic>>;
             final checkIns = snap.data![3] as Map<String, dynamic>;
 
             if (user == null) {

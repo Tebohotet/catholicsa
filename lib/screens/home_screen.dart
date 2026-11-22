@@ -2,12 +2,13 @@ import 'package:flutter/material.dart';
 import 'map_screen.dart';
 import 'browse_screen.dart';
 import 'readings_screen.dart';
-import 'events_screen.dart';
-import 'shop_screen.dart';
+import 'hymns_screen.dart';
 import 'account_screen.dart';
 import 'church_detail_screen.dart';
+import 'messaging/messages_inbox_screen.dart';
 import '../services/notification_service.dart';
 import '../services/firestore_service.dart';
+import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../app.dart';
 
@@ -92,16 +93,30 @@ class _HomeScreenState extends State<HomeScreen> {
   // church detail page (or anything else) stays *inside* that tab instead
   // of covering the whole screen - the bottom nav bar lives outside all of
   // them and never disappears.
+  //
+  // Only 4 tabs right now, not 6: Events and Shop are deliberately left
+  // off the bottom bar - the project owner's own call ("Hiding the un[us]ed
+  // Tabs, events, Shop, we do not have any information in it") since
+  // neither has any real events/listings in production yet, unlike Map,
+  // Browse, Readings and Hymns which all do. Their screens, routes and
+  // backing services are untouched and still fully working - EventsScreen
+  // and ShopScreen just aren't one of _tabRoots below, so admins can still
+  // manage events/listings from the Admin Panel exactly as before. Put
+  // them back on the bar (and bump this List.generate and the one in
+  // build() below back to 6) once there's real content in either one.
   final List<GlobalKey<NavigatorState>> _navigatorKeys =
-      List.generate(6, (_) => GlobalKey<NavigatorState>());
+      List.generate(4, (_) => GlobalKey<NavigatorState>());
 
+  // Account used to be its own tab here. It's reached from the profile
+  // menu now instead (see _ProfileMenuButton below) - the project owner's
+  // own ask: "we will put Hymns there Next to Readings... On the menu,
+  // put 1.My Profile which leads to Account As It is." The screen itself
+  // (AccountScreen) didn't need to change at all for this.
   static const _tabRoots = [
     MapScreen(),
     BrowseScreen(),
     ReadingsScreen(),
-    EventsScreen(),
-    ShopScreen(),
-    AccountScreen(),
+    HymnsScreen(),
   ];
 
   Widget _buildTabNavigator(int index) {
@@ -144,9 +159,28 @@ class _HomeScreenState extends State<HomeScreen> {
         }
       },
       child: Scaffold(
-        body: IndexedStack(
-          index: _index,
-          children: List.generate(6, _buildTabNavigator),
+        body: Stack(
+          children: [
+            IndexedStack(
+              index: _index,
+              children: List.generate(4, _buildTabNavigator),
+            ),
+            // Floating in a fixed top-right spot, on top of every tab,
+            // instead of living inside any one of them - so it's always
+            // in the same place no matter which tab is open, and none of
+            // the six tab screens had to be touched to make room for it.
+            // Checked all six: nothing else anchors itself to this corner
+            // (Map's own overlay controls sit top-left instead).
+            SafeArea(
+              child: Align(
+                alignment: Alignment.topRight,
+                child: Padding(
+                  padding: const EdgeInsets.all(8),
+                  child: const _ProfileMenuButton(),
+                ),
+              ),
+            ),
+          ],
         ),
         bottomNavigationBar: NavigationBar(
           selectedIndex: _index,
@@ -155,11 +189,66 @@ class _HomeScreenState extends State<HomeScreen> {
             NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: 'Map'),
             NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Browse'),
             NavigationDestination(icon: Icon(Icons.menu_book_outlined), selectedIcon: Icon(Icons.menu_book), label: 'Readings'),
-            NavigationDestination(icon: Icon(Icons.event_outlined), selectedIcon: Icon(Icons.event), label: 'Events'),
-            NavigationDestination(icon: Icon(Icons.storefront_outlined), selectedIcon: Icon(Icons.storefront), label: 'Shop'),
-            NavigationDestination(icon: Icon(Icons.person_outline), selectedIcon: Icon(Icons.person), label: 'Account'),
+            NavigationDestination(icon: Icon(Icons.library_music_outlined), selectedIcon: Icon(Icons.library_music), label: 'Hymns'),
           ],
         ),
+      ),
+    );
+  }
+}
+
+/// The replacement for the old Account tab: a small always-visible button,
+/// top-right, that opens a 3-item menu - "My Profile" (the Account screen,
+/// unchanged), "Messages" (the inbox), "Log out" - exactly the 3 items the
+/// project owner asked for. Pushed onto the *root* navigator (above the
+/// bottom nav entirely, via navigatorKey[0]'s ancestor) rather than onto
+/// any one tab's own stack, so it opens the same way and pops back to
+/// whichever tab was showing, regardless of which tab that is.
+class _ProfileMenuButton extends StatelessWidget {
+  const _ProfileMenuButton();
+
+  Future<void> _signOut(BuildContext context) async {
+    try {
+      await AuthService().signOut();
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sign out failed: $e')));
+      }
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    return Material(
+      color: AppColors.paper,
+      shape: const CircleBorder(),
+      elevation: 3,
+      child: PopupMenuButton<String>(
+        tooltip: 'Account menu',
+        icon: const Icon(Icons.person, color: AppColors.stone),
+        onSelected: (value) {
+          // rootNavigator: true climbs past the tab's own Navigator to
+          // the one HomeScreen itself lives in, so this opens as a full
+          // page over the whole bottom-nav shell - not nested a second
+          // level deep inside whichever tab happened to be open.
+          final root = Navigator.of(context, rootNavigator: true);
+          switch (value) {
+            case 'profile':
+              root.push(MaterialPageRoute(builder: (_) => const AccountScreen()));
+              break;
+            case 'messages':
+              root.push(MaterialPageRoute(builder: (_) => const MessagesInboxScreen()));
+              break;
+            case 'logout':
+              _signOut(context);
+              break;
+          }
+        },
+        itemBuilder: (context) => const [
+          PopupMenuItem(value: 'profile', child: ListTile(leading: Icon(Icons.person_outline), title: Text('My Profile'), contentPadding: EdgeInsets.zero)),
+          PopupMenuItem(value: 'messages', child: ListTile(leading: Icon(Icons.chat_bubble_outline), title: Text('Messages'), contentPadding: EdgeInsets.zero)),
+          PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout, color: Colors.redAccent), title: Text('Log out', style: TextStyle(color: Colors.redAccent)), contentPadding: EdgeInsets.zero)),
+        ],
       ),
     );
   }

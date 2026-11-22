@@ -441,8 +441,34 @@ extension MarketplaceAdminService on FirestoreService {
   /// seller could list an item and never see it again to fix a typo or
   /// update the price, even though the rule has always supported them
   /// doing exactly that.
+  ///
+  /// Only ever call this for the SIGNED-IN user's own uid. The products
+  /// rule is `isSuperAdmin() || status == 'approved' || sellerId ==
+  /// request.auth.uid` - that last clause is about who's ASKING, not
+  /// which uid was passed in here, so querying someone else's uid (a
+  /// real bug found this way: UserProfileScreen used to call this for
+  /// whichever profile was open) makes Firestore reject the whole query
+  /// with permission-denied for any viewer who isn't a super admin,
+  /// because it can't prove every matching doc is either approved or
+  /// the viewer's own. Use getApprovedProductsForSeller below for "what
+  /// does this other person sell" instead.
   Future<List<Map<String, dynamic>>> getMyProducts(String uid) async {
     final snap = await _db.collectionGroup('products').where('sellerId', isEqualTo: uid).get();
+    return snap.docs.map((d) => {'id': d.id, 'parishId': d.reference.parent.parent!.parent.parent!.id, 'churchId': d.reference.parent.parent!.id, ...d.data()}).toList();
+  }
+
+  /// What a given uid publicly sells - safe to call for ANY uid, viewed
+  /// by anyone (used by UserProfileScreen's "What they sell" section).
+  /// The extra status filter isn't just a nicety: it's what lets this
+  /// collection-group query satisfy the products rule's `status ==
+  /// 'approved'` branch for a viewer who isn't that seller and isn't a
+  /// super admin, instead of permission-denied (see getMyProducts above
+  /// for the full story of that bug).
+  Future<List<Map<String, dynamic>>> getApprovedProductsForSeller(String uid) async {
+    final snap = await _db.collectionGroup('products')
+        .where('sellerId', isEqualTo: uid)
+        .where('status', isEqualTo: 'approved')
+        .get();
     return snap.docs.map((d) => {'id': d.id, 'parishId': d.reference.parent.parent!.parent.parent!.id, 'churchId': d.reference.parent.parent!.id, ...d.data()}).toList();
   }
 
