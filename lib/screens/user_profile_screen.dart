@@ -40,7 +40,17 @@ class UserProfileScreen extends StatelessWidget {
           ]),
           builder: (context, snap) {
             if (snap.hasError) {
-              return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Error: ${snap.error}')));
+              // The success path below starts with its own back button
+              // (it's part of the header Row, not the Scaffold) - without
+              // repeating it here, hitting an error on this screen left
+              // no way back except the OS back gesture/button.
+              return Column(
+                crossAxisAlignment: CrossAxisAlignment.start,
+                children: [
+                  IconButton(icon: const Icon(Icons.arrow_back), onPressed: () => Navigator.pop(context)),
+                  Expanded(child: Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Error: ${snap.error}', textAlign: TextAlign.center)))),
+                ],
+              );
             }
             if (!snap.hasData) return const Center(child: CircularProgressIndicator());
 

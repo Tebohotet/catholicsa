@@ -10,6 +10,7 @@ import '../widgets/church_form_dialogs.dart';
 import 'church_detail_screen.dart';
 import '../widgets/hierarchy_summary_sections.dart';
 import 'search_screen.dart';
+import 'admin_panel_screen.dart' show ParishVisibilitySection;
 
 /// One level up from ChurchDetailScreen - same shape (header, quick actions,
 /// section list) but everything below the header is aggregated from every
@@ -134,6 +135,21 @@ class _ParishDetailScreenState extends State<ParishDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
+                          // The only reachable place a Super Admin who
+                          // isn't personally registered as this parish's
+                          // own admin can flip "Visible in public
+                          // Browse" - the Admin Panel screen that also
+                          // has this switch is only linked from the
+                          // Account screen's own "Admin Of" list, which
+                          // a Super Admin visiting someone else's parish
+                          // wouldn't be on. _canManage already covers
+                          // Super Admin/Developer for ANY parish (see
+                          // AuthService.canManageParish), not just one
+                          // you're personally an admin of.
+                          if (_canManage) ...[
+                            ParishVisibilitySection(parishId: widget.parishId),
+                            const SizedBox(height: 20),
+                          ],
                           SectionLabel(
                             numeral: 'I',
                             title: 'Churches',

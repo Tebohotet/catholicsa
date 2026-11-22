@@ -122,9 +122,26 @@ class _HomeScreenState extends State<HomeScreen> {
   Widget _buildTabNavigator(int index) {
     return Navigator(
       key: _navigatorKeys[index],
+      // Rebuilds HomeScreen on every push/pop in any tab, so the profile
+      // button below can hide itself the instant something's pushed and
+      // reappear the instant that tab is back at its root. Found the
+      // hard way: the button used to float above EVERY pushed screen in
+      // every tab, not just the tab roots - overlapping ParishDetailScreen's
+      // own search icon, ChurchDetailScreen's own edit-pencil icon, and
+      // anything else with its own top-right control. Checking only the
+      // 6 (now 4) tab roots for collisions, like the original comment
+      // here claimed, was never actually enough - there are dozens of
+      // pushed screens underneath them.
+      observers: [_TabNavObserver(() { if (mounted) setState(() {}); })],
       onGenerateRoute: (settings) => MaterialPageRoute(builder: (_) => _tabRoots[index]),
     );
   }
+
+  // Is the currently-selected tab sitting at its own root (nothing
+  // pushed on top)? Used to decide whether the profile button should
+  // show at all - see _buildTabNavigator's observer above for why this
+  // needs to be reactive, not just checked once.
+  bool get _atTabRoot => !(_navigatorKeys[_index].currentState?.canPop() ?? false);
 
   Future<bool> _onWillPop() async {
     final navigator = _navigatorKeys[_index].currentState!;
@@ -165,21 +182,22 @@ class _HomeScreenState extends State<HomeScreen> {
               index: _index,
               children: List.generate(4, _buildTabNavigator),
             ),
-            // Floating in a fixed top-right spot, on top of every tab,
-            // instead of living inside any one of them - so it's always
-            // in the same place no matter which tab is open, and none of
-            // the six tab screens had to be touched to make room for it.
-            // Checked all six: nothing else anchors itself to this corner
-            // (Map's own overlay controls sit top-left instead).
-            SafeArea(
-              child: Align(
-                alignment: Alignment.topRight,
-                child: Padding(
-                  padding: const EdgeInsets.all(8),
-                  child: const _ProfileMenuButton(),
+            // Floating in a fixed top-right spot, on top of whichever tab
+            // is open - but ONLY while that tab is at its own root. The
+            // moment anything is pushed on top (a church page, a parish
+            // page, a profile, anything) this hides itself instead of
+            // sitting on top of that screen's own controls - see
+            // _atTabRoot and the observer in _buildTabNavigator above.
+            if (_atTabRoot)
+              SafeArea(
+                child: Align(
+                  alignment: Alignment.topRight,
+                  child: Padding(
+                    padding: const EdgeInsets.all(8),
+                    child: const _ProfileMenuButton(),
+                  ),
                 ),
               ),
-            ),
           ],
         ),
         bottomNavigationBar: NavigationBar(
@@ -197,7 +215,23 @@ class _HomeScreenState extends State<HomeScreen> {
   }
 }
 
-/// The replacement for the old Account tab: a small always-visible button,
+/// Fires [onChange] on any push/pop/remove/replace in whichever tab
+/// Navigator it's attached to - see _buildTabNavigator above for why.
+class _TabNavObserver extends NavigatorObserver {
+  final VoidCallback onChange;
+  _TabNavObserver(this.onChange);
+
+  @override
+  void didPush(Route route, Route? previousRoute) => onChange();
+  @override
+  void didPop(Route route, Route? previousRoute) => onChange();
+  @override
+  void didRemove(Route route, Route? previousRoute) => onChange();
+  @override
+  void didReplace({Route? newRoute, Route? oldRoute}) => onChange();
+}
+
+/// The replacement for the old Account tab: a small, often-hidden button,
 /// top-right, that opens a 3-item menu - "My Profile" (the Account screen,
 /// unchanged), "Messages" (the inbox), "Log out" - exactly the 3 items the
 /// project owner asked for. Pushed onto the *root* navigator (above the

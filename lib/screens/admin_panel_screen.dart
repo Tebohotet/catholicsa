@@ -99,7 +99,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                     child: ListView(
                       padding: const EdgeInsets.all(20),
                       children: [
-                        _ParishVisibilitySection(parishId: widget.parishId),
+                        ParishVisibilitySection(parishId: widget.parishId),
                         const SizedBox(height: 20),
                         const SectionLabel(numeral: 'I', title: 'Mass Times'),
                         if (_churches!.isEmpty)
@@ -340,15 +340,21 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
 /// active (see Parish.fromFirestore) so nothing already public vanishes -
 /// this switch is how you'd deliberately turn a parish OFF, and this
 /// screen is where you'd turn the real one ON for the first time.
-class _ParishVisibilitySection extends StatefulWidget {
+///
+/// Public (not `_`-prefixed) so `ParishDetailScreen` can reuse it too -
+/// that's the only place a Super Admin who isn't personally registered
+/// as *this* parish's admin can actually reach it, since this whole
+/// Admin Panel screen is only linked from the Account screen's "Admin
+/// Of" list, which only shows parishes you're personally an admin of.
+class ParishVisibilitySection extends StatefulWidget {
   final String parishId;
-  const _ParishVisibilitySection({required this.parishId});
+  const ParishVisibilitySection({super.key, required this.parishId});
 
   @override
-  State<_ParishVisibilitySection> createState() => _ParishVisibilitySectionState();
+  State<ParishVisibilitySection> createState() => _ParishVisibilitySectionState();
 }
 
-class _ParishVisibilitySectionState extends State<_ParishVisibilitySection> {
+class _ParishVisibilitySectionState extends State<ParishVisibilitySection> {
   late Future<Parish> _parishFuture;
 
   @override

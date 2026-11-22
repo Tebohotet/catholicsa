@@ -35,6 +35,15 @@ class MessagesInboxScreen extends StatelessWidget {
               child: StreamBuilder<List<Map<String, dynamic>>>(
                 stream: FirestoreService().streamMyConversations(),
                 builder: (context, snap) {
+                  // Without this, any real error (a missing index still
+                  // building, a transient permission hiccup, being
+                  // signed out) left this spinning forever instead of
+                  // showing anything - snap.hasData never becomes true
+                  // after a stream errors, so the old code had no way
+                  // to ever leave the loading state.
+                  if (snap.hasError) {
+                    return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Error: ${snap.error}', textAlign: TextAlign.center)));
+                  }
                   if (!snap.hasData) return const Center(child: CircularProgressIndicator());
                   final conversations = snap.data!;
                   if (conversations.isEmpty) {
