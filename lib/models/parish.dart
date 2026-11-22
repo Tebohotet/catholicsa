@@ -11,6 +11,12 @@ class Parish {
   final String contactPhone; // parish-wide fallback if a church has none of its own
   final String contactEmail;
   final Map<String, String> socialLinks; // e.g. {"facebook": "...", "whatsapp": "https://wa.me/27..."}
+  // Defaults to true so nothing already public vanishes just from this
+  // field being added - same reasoning as Church.isActive. Turned off by
+  // hand (Super Admin's parish list) for a parish that doesn't have real
+  // data entered yet, so it doesn't show to the public - e.g. every
+  // seeded/placeholder parish except the one(s) actually being worked on.
+  final bool isActive;
 
   Parish({
     required this.id,
@@ -26,6 +32,7 @@ class Parish {
     this.contactPhone = '',
     this.contactEmail = '',
     this.socialLinks = const {},
+    this.isActive = true,
   });
 
   factory Parish.fromFirestore(String id, Map<String, dynamic> data) {
@@ -46,6 +53,7 @@ class Parish {
       contactPhone: data['contactPhone'] as String? ?? '',
       contactEmail: data['contactEmail'] as String? ?? '',
       socialLinks: Map<String, String>.from(data['socialLinks'] ?? {}),
+      isActive: data['isActive'] as bool? ?? true,
     );
   }
 
@@ -57,6 +65,7 @@ class Parish {
         'contactPhone': contactPhone,
         'contactEmail': contactEmail,
         'socialLinks': socialLinks,
+        'isActive': isActive,
       };
 }
 

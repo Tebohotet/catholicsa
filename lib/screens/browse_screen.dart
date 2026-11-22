@@ -1,7 +1,9 @@
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../services/firestore_service.dart';
 import '../models/church.dart';
 import '../theme/app_theme.dart';
+import '../providers/view_as_role_provider.dart';
 import 'church_detail_screen.dart';
 import 'parish_detail_screen.dart';
 import 'diocese_detail_screen.dart';
@@ -115,8 +117,41 @@ class _FlatListCard extends StatelessWidget {
   }
 }
 
-class BrowseScreen extends StatelessWidget {
+/// Full South Africa -> Province -> Diocese -> Parish hierarchy, same as
+/// before - but only an admin sees it by default. For everyone else,
+/// while there's genuinely only one parish with real data entered
+/// (`isActive` - see _ParishVisibilitySection in admin_panel_screen.dart),
+/// browsing straight into Province/Diocese/Parish lists to find the one
+/// real entry isn't useful - it's just extra taps to reach the only
+/// thing actually there. The moment a second parish goes active, this
+/// naturally falls back to the full hierarchy on its own, no code change
+/// needed.
+class BrowseScreen extends ConsumerWidget {
   const BrowseScreen({super.key});
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final isAdmin = ref.watch(isRealSuperAdminProvider).maybeWhen(data: (v) => v, orElse: () => false);
+    if (!isAdmin) {
+      return FutureBuilder<List<Map<String, dynamic>>>(
+        future: FirestoreService().getActiveParishes(),
+        builder: (context, activeSnap) {
+          if (!activeSnap.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+          final active = activeSnap.data!;
+          if (active.length == 1) {
+            return ParishDetailScreen(parishId: active.first['id'] as String);
+          }
+          return _BrowseHierarchy(isAdmin: isAdmin);
+        },
+      );
+    }
+    return _BrowseHierarchy(isAdmin: isAdmin);
+  }
+}
+
+class _BrowseHierarchy extends StatelessWidget {
+  final bool isAdmin;
+  const _BrowseHierarchy({required this.isAdmin});
 
   @override
   Widget build(BuildContext context) {

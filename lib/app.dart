@@ -4,6 +4,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
+import 'screens/parish_detail_screen.dart';
 import 'providers/design_tokens_provider.dart';
 import 'providers/branding_provider.dart';
 import 'widgets/developer_debug_overlay.dart';
@@ -36,6 +37,26 @@ final rootRouteObserver = RouteObserver<ModalRoute<void>>();
   final match = RegExp(r'^/church/([^/]+)/([^/]+)/?$').firstMatch(Uri.base.path);
   if (match == null) return null;
   return (match.group(1)!, match.group(2)!);
+}
+
+/// A parish-only link on web, e.g. `https://catholicsa.co.za/st-jude-parish`
+/// - the "clean URL per parish" piece of the subdomain-per-parish idea,
+/// minus the DNS/custom-domain part: this works today with no extra
+/// Firebase or DNS setup, and a real subdomain can point at this same
+/// path later without changing any app code. Bare top-level path (no
+/// `/church/` prefix, which is handled separately above and always takes
+/// priority), since that's the shape a parish would actually want to
+/// share: `catholicsa.co.za/st-jude-parish`, not
+/// `catholicsa.co.za/parish/st-jude-parish`. A parish's `slug` defaults
+/// to its own Firestore document id (see `Parish.fromFirestore`), so the
+/// id is what this matches against - exactly like the church link above.
+String? _parishLinkFromCurrentUrl() {
+  if (!kIsWeb) return null;
+  final path = Uri.base.path;
+  if (path == '/' || path.isEmpty) return null;
+  final match = RegExp(r'^/([a-zA-Z0-9_-]+)/?$').firstMatch(path);
+  if (match == null) return null;
+  return match.group(1)!;
 }
 
 Color _parseHexColor(String hex, Color fallback) {
@@ -116,6 +137,14 @@ class _RootDecider extends StatelessWidget {
     final churchLink = _churchLinkFromCurrentUrl();
     if (churchLink != null) {
       return HomeScreen(initialChurchParishId: churchLink.$1, initialChurchId: churchLink.$2);
+    }
+    // A bare parish link (`/st-jude-parish`) opens that parish directly,
+    // same priority as a church link above - someone who followed a
+    // shared parish link wants that parish, not onboarding or the
+    // Browse hierarchy's default landing spot.
+    final parishLink = _parishLinkFromCurrentUrl();
+    if (parishLink != null) {
+      return ParishDetailScreen(parishId: parishLink);
     }
     return FutureBuilder<bool>(
       future: _hasSeenOnboarding(),

@@ -436,16 +436,23 @@ class HymnConversionService {
         singExePath,
         [voiceFilePath, cmudictPath, '-m', melodyMidiFile.path, '-l', lyricsFile.path, vocalWavFile.path],
       );
+      // Logged every time, not just on failure - an "exit code 0" that
+      // quietly sang almost nothing (wrong path resolved to something
+      // that didn't error, a voice file it barely used, etc.) needs to
+      // be told apart from a genuinely good vocal.wav that the mixing
+      // step then lost, and the only way to do that without re-running
+      // this by hand is to see what sing.exe itself said, every time.
       log.add('sing exit code: ${singResult.exitCode}');
+      if ((singResult.stdout as String).trim().isNotEmpty) log.add('sing stdout: ${singResult.stdout}');
+      if ((singResult.stderr as String).trim().isNotEmpty) log.add('sing stderr: ${singResult.stderr}');
       if (singResult.exitCode != 0 || !vocalWavFile.existsSync()) {
-        log.add('stdout: ${singResult.stdout}');
-        log.add('stderr: ${singResult.stderr}');
         return ConversionResult(success: false, error: 'OddVoices failed to render the vocal line - see log.', log: log);
       }
-      log.add('Vocal line synthesized.');
+      final vocalBytesForLog = await vocalWavFile.readAsBytes();
+      log.add('Vocal line synthesized (${vocalBytesForLog.length} bytes).');
 
       log.add('Step 4/4: Mixing the vocal line into the instrumental...');
-      final combinedBytes = _mixWavFiles(await instrumentalWavFile.readAsBytes(), await vocalWavFile.readAsBytes());
+      final combinedBytes = _mixWavFiles(await instrumentalWavFile.readAsBytes(), vocalBytesForLog, log);
       final combinedFile = File(p.join(workDir.path, 'combined.wav'));
       await combinedFile.writeAsBytes(combinedBytes);
       log.add('Mixed.');
@@ -502,14 +509,42 @@ class HymnConversionService {
   /// summing, so the voice is always actually audible regardless of
   /// either tool's own internal volume, and the final sum is scaled
   /// back down if it would otherwise clip.
-  static Uint8List _mixWavFiles(Uint8List instrumentalBytes, Uint8List vocalBytes) {
+  static Uint8List _mixWavFiles(Uint8List instrumentalBytes, Uint8List vocalBytes, [List<String>? log]) {
     final instrumental = _WavAudio.parse(instrumentalBytes);
     final vocal = _WavAudio.parse(vocalBytes);
     final rate = instrumental.sampleRate;
     final channels = instrumental.channels;
 
-    final a = _normalizePeak(instrumental.resampledTo(rate, channels));
-    final b = _normalizePeak(vocal.resampledTo(rate, channels));
+    int peakOf(List<int> s) {
+      var p = 0;
+      for (final x in s) {
+        final abs = x < 0 ? -x : x;
+        if (abs > p) p = abs;
+      }
+      return p;
+    }
+
+    final rawInstrumental = instrumental.resampledTo(rate, channels);
+    final rawVocal = vocal.resampledTo(rate, channels);
+    // Logged unconditionally - a genuinely silent/near-silent vocal.wav
+    // (OddVoices "succeeded" but produced little or nothing: a wrong
+    // path it didn't complain about, melody notes that didn't extract
+    // right, etc.) needs to be visible directly, instead of looking
+    // identical in the log to the "too quiet to notice" volume-balance
+    // bug this normalization already fixed.
+    log?.add('Instrumental: ${instrumental.sampleRate} Hz, ${instrumental.channels} ch, '
+        '${rawInstrumental.length} samples (~${(rawInstrumental.length / (rate * channels)).toStringAsFixed(1)}s), '
+        'peak ${peakOf(rawInstrumental)}/32767.');
+    log?.add('Vocal: ${vocal.sampleRate} Hz, ${vocal.channels} ch, '
+        '${rawVocal.length} samples (~${(rawVocal.length / (vocal.sampleRate * vocal.channels)).toStringAsFixed(1)}s), '
+        'peak ${peakOf(rawVocal)}/32767.');
+    if (peakOf(rawVocal) < 50) {
+      log?.add('WARNING: the vocal track is essentially silent before mixing even starts - normalizing volume '
+          "can't fix that. The problem is upstream (the melody MIDI, the lyrics, or the sing.exe call itself), not the mix.");
+    }
+
+    final a = _normalizePeak(rawInstrumental);
+    final b = _normalizePeak(rawVocal);
     final length = a.length > b.length ? a.length : b.length;
 
     final mixed = List<int>.filled(length, 0);
@@ -530,6 +565,8 @@ class HymnConversionService {
         mixed[i] = (mixed[i] * scale).round();
       }
     }
+    log?.add('Both tracks normalized to the same peak level and summed - combined length '
+        '${(length / (rate * channels)).toStringAsFixed(1)}s.');
 
     return _writeWav16(mixed, sampleRate: rate, channels: channels);
   }

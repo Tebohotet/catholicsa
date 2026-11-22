@@ -177,6 +177,12 @@ extension CommunitySearchService on FirestoreService {
   Future<void> submitCatechistApplication({
     required String level, // 'parish' | 'national'
     String? parishId,
+    // Denormalized alongside the id - the applicant never sees a raw
+    // Firestore id either, so the real name has to be stored somewhere
+    // for the admin review list to show it without an extra lookup.
+    String? parishName,
+    String? churchId,
+    String? churchName,
     required String applicantName,
     required String applicantContact,
   }) async {
@@ -184,7 +190,8 @@ extension CommunitySearchService on FirestoreService {
     if (uid == null) throw Exception('Sign in to apply');
     await _db.collection('catechistApplications').add({
       'applicantId': uid, 'applicantName': applicantName, 'applicantContact': applicantContact,
-      'type': 'catechist', 'level': level, 'parishId': parishId,
+      'type': 'catechist', 'level': level, 'parishId': parishId, 'parishName': parishName,
+      'churchId': churchId, 'churchName': churchName,
       'status': 'pending', 'createdAt': FieldValue.serverTimestamp(),
     });
   }

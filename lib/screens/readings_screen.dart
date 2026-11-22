@@ -613,7 +613,16 @@ class _ReadingRow extends StatelessWidget {
     if (!BibleCitationParser.booksLoaded) return citation;
     final parsed = BibleCitationParser.parse(citation);
     if (parsed == null) return citation;
-    final numericPart = citation.split('|').first.trim().replaceFirst(RegExp(r'^[^\d]+'), '');
+    // A leading `[^\d]+` alone fails to strip anything from a citation
+    // like "1 Corinthians 15:20-26, 28" - the string already starts with
+    // a digit (the book's own number), so nothing before the chapter
+    // number counts as "non-digit" and the whole citation survives
+    // unchanged, then gets the book name prepended a second time
+    // ("1 Corinthians 1 Corinthians 15:20-26, 28" - confirmed from a real
+    // Second Reading). Stripping an optional leading numeral first
+    // handles 1/2/3 Corinthians, Timothy, Peter, John, Kings, Samuel,
+    // Chronicles, Maccabees the same as any other book.
+    final numericPart = citation.split('|').first.trim().replaceFirst(RegExp(r'^\s*\d*\s*[^\d]+'), '');
     return '${parsed.bookName} $numericPart';
   }
 
@@ -732,7 +741,15 @@ class _InlineScripture extends StatelessWidget {
     // "everything after the book name" - the book name itself was
     // already resolved separately via BibleCitationParser, so this only
     // needs the numeric part, e.g. "52:13-53:12" or "4:14-16; 5:7-9".
-    final numericPart = citation.replaceFirst(RegExp(r'^[^\d]+'), '');
+    // Same leading-numeral problem as _displayCitation above: a book that
+    // starts with its own number ("1 Corinthians 15:20-26, 28") has no
+    // run of non-digit characters at the very start, so the old
+    // `^[^\d]+` pattern stripped nothing, the chapter:verse regexes below
+    // never matched the result, and the inline scripture for every
+    // numbered-book reading (1/2/3 John, Corinthians, Timothy, Peter,
+    // Kings, Samuel, Chronicles, Maccabees...) silently rendered nothing
+    // at all - confirmed missing from a real Second Reading, not assumed.
+    final numericPart = citation.replaceFirst(RegExp(r'^\s*\d*\s*[^\d]+'), '');
     final specs = <({int chapter, List<int>? verses})>[];
 
     for (final group in numericPart.split(';')) {

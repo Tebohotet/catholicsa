@@ -468,6 +468,23 @@ class FirestoreService {
     return Parish.fromFirestore(doc.id, doc.data()!);
   }
 
+  Future<void> setParishActive(String parishId, bool isActive) async {
+    await _db.collection('parishes').doc(parishId).update({'isActive': isActive});
+  }
+
+  /// Public-facing only, across every diocese/province at once - what lets
+  /// Browse skip straight to the one parish that actually has real data
+  /// while the rest are still placeholders, instead of making a visitor
+  /// click through Province -> Diocese -> Parish to find the only one
+  /// worth opening. Deliberately does NOT also require `hasChurch` like
+  /// `getParishes` does - a parish can be "active" (ready to show) before
+  /// its first church is even added, which is exactly today's state for
+  /// St Jude Parish.
+  Future<List<Map<String, dynamic>>> getActiveParishes() async {
+    final snap = await _db.collection('parishes').where('isActive', isEqualTo: true).get();
+    return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+  }
+
   /// Every parish, id and name only - what the Super Admin Panel's role
   /// assignment dropdown actually needs to stay current as new parishes
   /// get created, rather than a hardcoded list that silently goes stale.
