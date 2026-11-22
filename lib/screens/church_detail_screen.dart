@@ -23,6 +23,7 @@ import 'church_detail/photo_gallery.dart';
 import 'church_detail/finances_section.dart';
 import 'church_detail/comments_section.dart';
 import 'church_detail/favourite_button.dart';
+import 'church_detail/checkin_button.dart';
 import 'church_detail/notices_section.dart';
 import 'church_detail/song_book_dialog.dart';
 import 'church_detail/prayers_dialog.dart';
@@ -226,6 +227,7 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
                                 icon: const Icon(Icons.directions, size: 17),
                                 label: const Text('Get Directions'),
                               ),
+                              CheckInButton(parishId: parishId, parishName: parish.name, churchId: church.id, churchName: church.name),
                               if (phone.isNotEmpty)
                                 OutlinedButton.icon(
                                   style: OutlinedButton.styleFrom(foregroundColor: AppColors.ink, side: BorderSide(color: AppColors.ink.withValues(alpha: 0.3)), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11)),

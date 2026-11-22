@@ -21,6 +21,7 @@ import 'my_listings_screen.dart';
 import 'my_bible_bookmarks_screen.dart';
 import 'hymns_screen.dart';
 import 'server_driven_page_screen.dart';
+import 'messaging/messages_inbox_screen.dart';
 
 class AccountScreen extends ConsumerWidget {
   const AccountScreen({super.key});
@@ -402,6 +403,15 @@ class _SignedInView extends ConsumerWidget {
           const SizedBox(height: 10),
           OutlinedButton.icon(
             style: OutlinedButton.styleFrom(foregroundColor: AppColors.stone, side: const BorderSide(color: AppColors.stone)),
+            onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const MessagesInboxScreen())),
+            icon: const Icon(Icons.chat_bubble_outline, size: 16),
+            label: const Text('Messages'),
+          ),
+          const SizedBox(height: 10),
+          const _FavouritesPrivacyToggle(),
+          const SizedBox(height: 10),
+          OutlinedButton.icon(
+            style: OutlinedButton.styleFrom(foregroundColor: AppColors.stone, side: const BorderSide(color: AppColors.stone)),
             onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HymnsScreen())),
             icon: const Icon(Icons.library_music_outlined, size: 16),
             label: const Text('Hymns'),
@@ -574,6 +584,63 @@ class _MyActivityButtonsState extends State<_MyActivityButtons> {
         }
         return Column(crossAxisAlignment: CrossAxisAlignment.start, children: children);
       },
+    );
+  }
+}
+
+/// "Share my favourite churches publicly" - off by default, since the
+/// existing heart icon on a church page already saved favourites
+/// privately long before any profile page could show them to anyone
+/// else. Flipping this on mirrors the current list into a public field
+/// on this same user doc (see setFavouritesPublic) so a profile page
+/// can read it with no firestore.rules change at all.
+class _FavouritesPrivacyToggle extends StatefulWidget {
+  const _FavouritesPrivacyToggle();
+
+  @override
+  State<_FavouritesPrivacyToggle> createState() => _FavouritesPrivacyToggleState();
+}
+
+class _FavouritesPrivacyToggleState extends State<_FavouritesPrivacyToggle> {
+  bool? _value;
+  bool _saving = false;
+
+  @override
+  void initState() {
+    super.initState();
+    FirestoreService().getFavouritesPublic().then((v) {
+      if (mounted) setState(() => _value = v);
+    });
+  }
+
+  Future<void> _toggle(bool v) async {
+    setState(() { _value = v; _saving = true; });
+    try {
+      await FirestoreService().setFavouritesPublic(v);
+    } finally {
+      if (mounted) setState(() => _saving = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    if (_value == null) return const SizedBox.shrink();
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+      color: AppColors.paperDark,
+      child: Row(
+        children: [
+          const Expanded(
+            child: Text(
+              'Share my favourite churches publicly',
+              style: TextStyle(fontSize: 12, color: Colors.black87),
+            ),
+          ),
+          _saving
+              ? const SizedBox(width: 16, height: 16, child: CircularProgressIndicator(strokeWidth: 2))
+              : Switch(value: _value!, activeThumbColor: AppColors.brass, onChanged: _toggle),
+        ],
+      ),
     );
   }
 }

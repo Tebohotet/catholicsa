@@ -9,11 +9,11 @@ import '../models/parish.dart';
 import 'firestore_service.dart';
 
 
-/// This file was split into 4 pieces to reduce its size - it had grown
+/// This file was split into pieces to reduce its size - it had grown
 /// large enough to be the direct, repeated cause of real edit mistakes
 /// this session (a str_replace clobbering a neighboring method's
 /// declaration, caught only by checking method counts after every edit).
-/// The other 3 pieces are extension methods on FirestoreService, not
+/// The other pieces are extension methods on FirestoreService, not
 /// separate classes - exporting them here is what makes every existing
 /// `import '../services/firestore_service.dart'` across the whole app
 /// keep working completely unchanged, with zero call-site edits needed
@@ -21,6 +21,8 @@ import 'firestore_service.dart';
 export 'content_courses_service.dart';
 export 'marketplace_admin_service.dart';
 export 'community_search_service.dart';
+export 'church_checkin_service.dart';
+export 'messaging_service.dart';
 
 /// "Where to look" for search - national is the original full scan,
 /// everything else resolves to a real scoped query rather than filtering

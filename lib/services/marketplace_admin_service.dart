@@ -150,6 +150,19 @@ extension MarketplaceAdminService on FirestoreService {
     return results;
   }
 
+  /// What the Users screen shows before anyone's typed a search - the
+  /// project owner's own ask ("on load should show all of them"). Most
+  /// recently active first (lastActiveDate is a plain 'yyyy-MM-dd'
+  /// string from EngagementService, so it sorts correctly as-is) rather
+  /// than literally every user ever signed up, which doesn't scale and
+  /// isn't as useful - a user who's never been active at all (no
+  /// lastActiveDate set yet) simply doesn't show here, same as they
+  /// wouldn't be anyone's first thought when browsing "who's around".
+  Future<List<Map<String, dynamic>>> listRecentUsers({int limit = 50}) async {
+    final snap = await _db.collection('users').orderBy('lastActiveDate', descending: true).limit(limit).get();
+    return snap.docs.map((d) => {'uid': d.id, ...d.data()}).toList();
+  }
+
   Future<List<Map<String, dynamic>>> getParishAdmins(String parishId) async {
     final snap = await _db.collection('parishes').doc(parishId).collection('admins').get();
     return snap.docs.map((d) => {'uid': d.id, ...d.data()}).toList();
@@ -191,10 +204,47 @@ extension MarketplaceAdminService on FirestoreService {
       'role': role, 'displayName': displayName, 'email': email,
       'status': 'active', 'verified': true, 'addedAt': FieldValue.serverTimestamp(),
     });
+    await _logRoleHistory(uid: uid, parishId: parishId, role: role, action: 'granted');
   }
 
   Future<void> removeParishAdmin(String parishId, String uid) async {
+    final doc = await _db.collection('parishes').doc(parishId).collection('admins').doc(uid).get();
+    final role = doc.data()?['role'] as String? ?? 'admin';
     await _db.collection('parishes').doc(parishId).collection('admins').doc(uid).delete();
+    await _logRoleHistory(uid: uid, parishId: parishId, role: role, action: 'revoked');
+  }
+
+  /// A dated entry on the user's own public profile - "currently a
+  /// Parish Admin at St Jude, previously at X" - exactly the kind of
+  /// thing the project owner wants visible on a profile for a job or
+  /// Catechist application to lean on. Only called from the two methods
+  /// above, both of which require isSuperAdmin() in firestore.rules
+  /// already (see parishes/{id}/admins/{uid}'s write rule) - that's also
+  /// what makes writing to the TARGET user's own `users/{uid}` doc here
+  /// pass firestore.rules' write rule (isSuperAdmin, not self-write), so
+  /// don't move this call anywhere it could be reached by a non-super-
+  /// admin caller (e.g. a parish priest) without also revisiting that
+  /// rule - see the catechist-application path, which doesn't call this
+  /// for exactly that reason.
+  Future<void> _logRoleHistory({
+    required String uid,
+    required String parishId,
+    required String role,
+    required String action,
+  }) async {
+    final parishDoc = await _db.collection('parishes').doc(parishId).get();
+    final parishName = parishDoc.exists ? (parishDoc.data()?['name'] ?? '(deleted parish)') : '(deleted parish)';
+    await _db.collection('users').doc(uid).set({
+      'roleHistory': FieldValue.arrayUnion([
+        {
+          'parishId': parishId,
+          'parishName': parishName,
+          'role': role,
+          'action': action,
+          'at': Timestamp.now(), // arrayUnion can't hold a server-timestamp sentinel
+        }
+      ]),
+    }, SetOptions(merge: true));
   }
 
   Future<void> submitMassIntentionRequest({

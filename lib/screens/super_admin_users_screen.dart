@@ -1,14 +1,19 @@
 import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import 'user_profile_screen.dart';
 
-/// Search by name or email, pull up a real profile, edit it inline, and
-/// see every parish the user actually administers right now - not just
-/// the one parish the old single-parish picker on the Roles screen let
-/// you check at a time. Role grants/revokes themselves stay on the
-/// existing Roles screen rather than being duplicated here, since that
-/// flow is already built and audit-logged; this screen links to it
-/// instead of reimplementing it.
+/// Loads the most recently active users on open - the project owner's
+/// own ask ("on load should show all of them") - search by name or
+/// email, pull up a real profile, edit it inline, and see every parish
+/// the user actually administers right now - not just the one parish
+/// the old single-parish picker on the Roles screen let you check at a
+/// time. Role grants/revokes themselves stay on the existing Roles
+/// screen rather than being duplicated here, since that flow is already
+/// built and audit-logged; this screen links to it instead of
+/// reimplementing it. Tapping a user's name opens their full public
+/// profile (streak, roles, courses, etc.); the chevron on the right is
+/// the separate inline quick-edit this screen always had.
 class SuperAdminUsersScreen extends StatefulWidget {
   const SuperAdminUsersScreen({super.key});
 
@@ -19,13 +24,29 @@ class SuperAdminUsersScreen extends StatefulWidget {
 class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen> {
   final _searchCtrl = TextEditingController();
   List<Map<String, dynamic>> _results = [];
+  bool _loading = true;
   bool _searching = false;
   bool _searched = false;
   String? _expandedUid;
 
+  @override
+  void initState() {
+    super.initState();
+    _loadRecent();
+  }
+
+  Future<void> _loadRecent() async {
+    final recent = await FirestoreService().listRecentUsers();
+    if (mounted) setState(() { _results = recent; _loading = false; });
+  }
+
   Future<void> _search() async {
     final q = _searchCtrl.text.trim();
-    if (q.isEmpty) return;
+    if (q.isEmpty) {
+      setState(() { _searched = false; _expandedUid = null; _loading = true; });
+      await _loadRecent();
+      return;
+    }
     setState(() { _searching = true; _searched = true; _expandedUid = null; });
     final results = await FirestoreService().searchUsers(q);
     if (mounted) setState(() { _results = results; _searching = false; });
@@ -63,7 +84,7 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen> {
                   crossAxisAlignment: CrossAxisAlignment.start,
                   children: [
                     const Text(
-                      'Search by name or email - matches a partial name too, not just an exact address, so you can find a group of similarly-named users at once.',
+                      'Shows the most recently active users below. Search by name or email - matches a partial name too, not just an exact address, so you can find a group of similarly-named users at once.',
                       style: TextStyle(fontSize: 12, color: Colors.black54),
                     ),
                     const SizedBox(height: 12),
@@ -87,7 +108,9 @@ class _SuperAdminUsersScreenState extends State<SuperAdminUsersScreen> {
                       ],
                     ),
                     const SizedBox(height: 16),
-                    if (_searched && !_searching && _results.isEmpty)
+                    if (_loading)
+                      const Center(child: Padding(padding: EdgeInsets.all(20), child: CircularProgressIndicator())),
+                    if (!_loading && _searched && !_searching && _results.isEmpty)
                       const Text('No users matched that search.', style: TextStyle(fontSize: 13, color: Colors.black54)),
                     ..._results.map((u) => _UserResultTile(
                       user: u,
@@ -172,7 +195,19 @@ class _UserResultTileState extends State<_UserResultTile> {
                 : const CircleAvatar(child: Icon(Icons.person, size: 18)),
             title: Text(u['displayName'] ?? '(no name)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             subtitle: Text(u['email'] ?? '', style: const TextStyle(fontSize: 12)),
-            trailing: Icon(widget.expanded ? Icons.expand_less : Icons.expand_more),
+            trailing: Row(
+              mainAxisSize: MainAxisSize.min,
+              children: [
+                IconButton(
+                  tooltip: 'View profile',
+                  icon: const Icon(Icons.badge_outlined, size: 20, color: AppColors.stone),
+                  onPressed: () => Navigator.push(context, MaterialPageRoute(
+                    builder: (_) => UserProfileScreen(uid: u['uid']),
+                  )),
+                ),
+                Icon(widget.expanded ? Icons.expand_less : Icons.expand_more),
+              ],
+            ),
             onTap: widget.onToggle,
           ),
           if (widget.expanded)

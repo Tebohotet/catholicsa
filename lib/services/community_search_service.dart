@@ -785,6 +785,7 @@ extension CommunitySearchService on FirestoreService {
     if (uid == null) throw Exception('Sign in to save favourites');
     final ref = _db.collection('users').doc(uid).collection('favouriteChurches').doc(churchId);
     final doc = await ref.get();
+    final nowFavourited = !doc.exists;
     if (doc.exists) {
       await ref.delete();
     } else {
@@ -794,6 +795,68 @@ extension CommunitySearchService on FirestoreService {
       // favourited this exact church, across every user's subcollection.
       await ref.set({'parishId': parishId, 'churchId': churchId, 'addedAt': FieldValue.serverTimestamp()});
     }
+    await _syncPublicFavouriteIfOptedIn(uid: uid, parishId: parishId, churchId: churchId, nowFavourited: nowFavourited);
+  }
+
+  /// Mirrors one favourite in or out of the public `publicFavouriteChurches`
+  /// field on the user's own doc - but only if they've turned on "Share my
+  /// favourite churches publicly" (see setFavouritesPublic below). The
+  /// private favouriteChurches subcollection above is what the app itself
+  /// always uses (the heart icon, notices) and stays owner-only in
+  /// firestore.rules either way; this public field is a separate, opt-in
+  /// mirror a profile page can safely read without any rules change, since
+  /// `users/{uid}` is already publicly readable.
+  Future<void> _syncPublicFavouriteIfOptedIn({
+    required String uid,
+    required String parishId,
+    required String churchId,
+    required bool nowFavourited,
+  }) async {
+    final userRef = _db.collection('users').doc(uid);
+    final userDoc = await userRef.get();
+    if (userDoc.data()?['favouritesPublic'] != true) return;
+    final current = List<Map<String, dynamic>>.from(
+      (userDoc.data()?['publicFavouriteChurches'] as List?)?.map((e) => Map<String, dynamic>.from(e as Map)) ?? [],
+    );
+    current.removeWhere((e) => e['parishId'] == parishId && e['churchId'] == churchId);
+    if (nowFavourited) {
+      String churchName = churchId;
+      try {
+        churchName = (await getChurch(parishId, churchId)).name;
+      } catch (_) {
+        // church lookup failed - still record the favourite, just without a friendly name
+      }
+      current.add({'parishId': parishId, 'churchId': churchId, 'churchName': churchName});
+    }
+    await userRef.set({'publicFavouriteChurches': current}, SetOptions(merge: true));
+  }
+
+  /// The privacy switch itself, flipped from the Account screen. Turning
+  /// it on does a one-time full rebuild of the public mirror from the
+  /// real (private) favourites list, so it's accurate from the moment
+  /// it's switched on, not just for favourites added afterward. Turning
+  /// it off clears the public mirror outright, rather than leaving stale
+  /// data sitting there now hidden by the flag alone.
+  Future<void> setFavouritesPublic(bool value) async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) throw Exception('Sign in first');
+    final userRef = _db.collection('users').doc(uid);
+    if (!value) {
+      await userRef.set({'favouritesPublic': false, 'publicFavouriteChurches': []}, SetOptions(merge: true));
+      return;
+    }
+    final churches = await getFavouriteChurches();
+    await userRef.set({
+      'favouritesPublic': true,
+      'publicFavouriteChurches': churches.map((c) => {'parishId': c.parishId, 'churchId': c.id, 'churchName': c.name}).toList(),
+    }, SetOptions(merge: true));
+  }
+
+  Future<bool> getFavouritesPublic() async {
+    final uid = FirebaseAuth.instance.currentUser?.uid;
+    if (uid == null) return false;
+    final doc = await _db.collection('users').doc(uid).get();
+    return doc.data()?['favouritesPublic'] == true;
   }
 
   /// Resolves each favourite into the real Church object, using the stored
