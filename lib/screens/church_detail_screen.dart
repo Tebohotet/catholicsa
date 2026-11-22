@@ -2,6 +2,7 @@ import 'package:cloud_firestore/cloud_firestore.dart';
 import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../models/church.dart';
 import '../models/parish.dart';
@@ -9,6 +10,7 @@ import '../models/parish.dart';
 import '../theme/app_theme.dart';
 import '../widgets/share_button.dart';
 import '../widgets/async_section.dart';
+import '../widgets/church_form_dialogs.dart';
 import 'parish_detail_screen.dart';
 import 'course_list_screen.dart';
 import 'church_detail/map_popup.dart';
@@ -56,6 +58,13 @@ class ChurchDetailScreen extends StatefulWidget {
 class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
   bool _previewPhotos = false;
 
+  // Gates the inline edit icon in the icon row below - whether this
+  // account can edit THIS church (a registered admin of its parish, or
+  // Super Admin/Developer). Same reasoning as ParishDetailScreen's
+  // _canManage: fix it from the page you're already looking at,
+  // instead of a trip to the separate Admin Panel.
+  bool _canManage = false;
+
   // Placeholder images purely to preview layout - real churches show clean
   // gradient/icon placeholders by default until an admin uploads real photos.
   static const _sampleBanner = 'https://picsum.photos/seed/catholicsa-banner/800/400';
@@ -66,6 +75,14 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
     {'url': 'https://picsum.photos/seed/catholicsa-3/400/400', 'caption': 'First Holy Communion', 'date': '10 May 2026', 'uploadedBy': 'Parish Office', 'kind': 'image', 'isSample': 'true'},
     {'url': 'https://picsum.photos/seed/catholicsa-1/400/400', 'caption': 'Adoration, Thursday evening', 'date': '18 Jul 2026', 'uploadedBy': 'Parish Office', 'kind': 'video', 'isSample': 'true'},
   ];
+
+  @override
+  void initState() {
+    super.initState();
+    AuthService().canManageParish(widget.parishId).then((v) {
+      if (mounted) setState(() => _canManage = v);
+    });
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -227,7 +244,7 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
                                 icon: const Icon(Icons.directions, size: 17),
                                 label: const Text('Get Directions'),
                               ),
-                              CheckInButton(parishId: parishId, parishName: parish.name, churchId: church.id, churchName: church.name),
+                              CheckInButton(parishId: parishId, parishName: parish.name, churchId: church.id, churchName: church.name, churchGeopoint: church.geopoint),
                               if (phone.isNotEmpty)
                                 OutlinedButton.icon(
                                   style: OutlinedButton.styleFrom(foregroundColor: AppColors.ink, side: BorderSide(color: AppColors.ink.withValues(alpha: 0.3)), padding: const EdgeInsets.symmetric(horizontal: 16, vertical: 11)),
@@ -292,6 +309,17 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
                                   builder: (_) => CourseListScreen(parishId: parishId, churchId: church.id, churchName: church.name),
                                 )),
                               ),
+                              if (_canManage)
+                                IconButton(
+                                  tooltip: 'Edit this church',
+                                  icon: const Icon(Icons.edit_outlined, size: 20, color: AppColors.brass),
+                                  onPressed: () => showChurchFormDialog(
+                                    context,
+                                    parishId: parishId,
+                                    existing: church,
+                                    onSaved: (_) => setState(() {}),
+                                  ),
+                                ),
                               const Spacer(),
                               TextButton.icon(
                                 onPressed: () => _showReportDialog(context, parishId, church.id),

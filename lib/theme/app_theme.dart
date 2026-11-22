@@ -38,7 +38,13 @@ class CenteredContent extends StatelessWidget {
 class SectionLabel extends StatelessWidget {
   final String numeral;
   final String title;
-  const SectionLabel({super.key, required this.numeral, required this.title});
+  // Optional - an admin-only "add" control next to a section header, so
+  // it can be reached right from the page it adds content to (see the
+  // Churches section on ParishDetailScreen) instead of only ever from a
+  // separate Admin Panel. Every existing call site omits this and is
+  // unaffected.
+  final Widget? trailing;
+  const SectionLabel({super.key, required this.numeral, required this.title, this.trailing});
 
   @override
   Widget build(BuildContext context) {
@@ -52,6 +58,7 @@ class SectionLabel extends StatelessWidget {
           Text(title, style: const TextStyle(fontFamily: appSerif, fontSize: 22, color: AppColors.stoneDark)),
           const SizedBox(width: 12),
           Expanded(child: Container(height: 1, color: AppColors.ink.withValues(alpha: 0.13))),
+          if (trailing != null) ...[const SizedBox(width: 12), trailing!],
         ],
       ),
     );

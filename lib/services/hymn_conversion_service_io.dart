@@ -301,7 +301,7 @@ class HymnConversionService {
       final midiBytes = MusicXmlToMidiConverter.convertAll(
         repeatedMxlBytes,
         bpm: bpm,
-        instrumentProgram: instrumentProgram,
+        instrumentPrograms: instrumentProgram != null ? [instrumentProgram] : null,
       );
       final midiFile = File(p.join(workDir.path, 'output.mid'));
       await midiFile.writeAsBytes(midiBytes);
@@ -406,7 +406,7 @@ class HymnConversionService {
       final instrumentalMidiBytes = MusicXmlToMidiConverter.convertAll(
         repeatedMxlBytes,
         bpm: bpm,
-        instrumentProgram: instrumentProgram,
+        instrumentPrograms: instrumentProgram != null ? [instrumentProgram] : null,
       );
       final instrumentalMidiFile = File(p.join(workDir.path, 'instrumental.mid'));
       await instrumentalMidiFile.writeAsBytes(instrumentalMidiBytes);

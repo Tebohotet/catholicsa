@@ -5,15 +5,15 @@ import 'user_profile_screen.dart';
 
 /// Loads the most recently active users on open - the project owner's
 /// own ask ("on load should show all of them") - search by name or
-/// email, pull up a real profile, edit it inline, and see every parish
-/// the user actually administers right now - not just the one parish
-/// the old single-parish picker on the Roles screen let you check at a
-/// time. Role grants/revokes themselves stay on the existing Roles
-/// screen rather than being duplicated here, since that flow is already
-/// built and audit-logged; this screen links to it instead of
-/// reimplementing it. Tapping a user's name opens their full public
-/// profile (streak, roles, courses, etc.); the chevron on the right is
-/// the separate inline quick-edit this screen always had.
+/// email. Tapping a user ("Users button to see the profile") opens
+/// their full public profile (streak, roles, courses, etc.); the pencil
+/// icon on the right is a separate inline quick-edit (display name,
+/// phone, and a look at every parish they actually administer right
+/// now - not just the one parish the old single-parish picker on the
+/// Roles screen let you check at a time). Role grants/revokes
+/// themselves stay on the existing Roles screen rather than being
+/// duplicated here, since that flow is already built and audit-logged;
+/// this screen links to it instead of reimplementing it.
 class SuperAdminUsersScreen extends StatefulWidget {
   const SuperAdminUsersScreen({super.key});
 
@@ -195,20 +195,14 @@ class _UserResultTileState extends State<_UserResultTile> {
                 : const CircleAvatar(child: Icon(Icons.person, size: 18)),
             title: Text(u['displayName'] ?? '(no name)', style: const TextStyle(fontWeight: FontWeight.bold, fontSize: 14)),
             subtitle: Text(u['email'] ?? '', style: const TextStyle(fontSize: 12)),
-            trailing: Row(
-              mainAxisSize: MainAxisSize.min,
-              children: [
-                IconButton(
-                  tooltip: 'View profile',
-                  icon: const Icon(Icons.badge_outlined, size: 20, color: AppColors.stone),
-                  onPressed: () => Navigator.push(context, MaterialPageRoute(
-                    builder: (_) => UserProfileScreen(uid: u['uid']),
-                  )),
-                ),
-                Icon(widget.expanded ? Icons.expand_less : Icons.expand_more),
-              ],
+            trailing: IconButton(
+              tooltip: widget.expanded ? 'Hide quick-edit' : 'Quick-edit (name, phone, Admin Of)',
+              icon: Icon(widget.expanded ? Icons.expand_less : Icons.edit_outlined, size: 20, color: AppColors.stone),
+              onPressed: widget.onToggle,
             ),
-            onTap: widget.onToggle,
+            onTap: () => Navigator.push(context, MaterialPageRoute(
+              builder: (_) => UserProfileScreen(uid: u['uid']),
+            )),
           ),
           if (widget.expanded)
             Padding(

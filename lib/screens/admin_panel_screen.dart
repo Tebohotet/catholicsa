@@ -10,6 +10,7 @@ import '../models/church.dart';
 import '../models/parish.dart';
 import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
+import '../widgets/church_form_dialogs.dart';
 import 'payment_gateway_settings_screen.dart';
 import 'lesson_editor_screen.dart';
 
@@ -43,146 +44,24 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
     if (mounted) setState(() { _churches = list; _selectedChurchId = selectId ?? _selectedChurchId; });
   }
 
-  Future<void> _showChurchForm(BuildContext context, {Church? existing}) async {
-    final isEdit = existing != null;
-    final nameCtrl = TextEditingController(text: existing?.name ?? '');
-    final addressCtrl = TextEditingController(text: existing?.address ?? '');
-    final phoneCtrl = TextEditingController(text: existing?.contactPhone ?? '');
-    final emailCtrl = TextEditingController(text: existing?.contactEmail ?? '');
-    final capacityCtrl = TextEditingController(text: existing?.seatingCapacity?.toString() ?? '');
-    String buildingType = existing?.buildingType ?? 'Church';
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => StatefulBuilder(
-        builder: (context, setDialogState) => AlertDialog(
-          backgroundColor: AppColors.paper,
-          title: Text(isEdit ? 'Edit Church' : 'Add Church', style: const TextStyle(fontFamily: appSerif, fontSize: 18)),
-          content: SingleChildScrollView(
-            child: Column(
-              mainAxisSize: MainAxisSize.min,
-              crossAxisAlignment: CrossAxisAlignment.start,
-              children: [
-                TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Church name', hintText: 'e.g. St Jude Catholic Church')),
-                TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'Address')),
-                TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Contact phone (optional)')),
-                TextField(controller: emailCtrl, decoration: const InputDecoration(labelText: 'Contact email (optional)')),
-                TextField(controller: capacityCtrl, decoration: const InputDecoration(labelText: 'Seating capacity (optional)', hintText: 'e.g. 250'), keyboardType: TextInputType.number),
-                const SizedBox(height: 10),
-                const Text('Building type', style: TextStyle(fontSize: 12, fontWeight: FontWeight.w600)),
-                DropdownButton<String>(
-                  value: buildingType, isExpanded: true,
-                  items: const [
-                    DropdownMenuItem(value: 'Church', child: Text('Church')),
-                    DropdownMenuItem(value: 'Cathedral', child: Text('Cathedral')),
-                    DropdownMenuItem(value: 'Basilica', child: Text('Basilica')),
-                    DropdownMenuItem(value: 'Convent', child: Text('Convent')),
-                    DropdownMenuItem(value: 'Chapel', child: Text('Chapel')),
-                  ],
-                  onChanged: (v) => setDialogState(() => buildingType = v!),
-                ),
-                const Padding(
-                  padding: EdgeInsets.only(top: 10),
-                  child: Text('GPS location, accessibility details, and amenities can be added afterward - this gets the church listed so you can start adding Mass times right away.', style: TextStyle(fontSize: 11, color: Colors.black45, fontStyle: FontStyle.italic)),
-                ),
-              ],
-            ),
-          ),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-            FilledButton(
-              style: FilledButton.styleFrom(backgroundColor: AppColors.brass),
-              onPressed: () async {
-                if (nameCtrl.text.trim().isEmpty || addressCtrl.text.trim().isEmpty) return;
-                final capacity = int.tryParse(capacityCtrl.text.trim());
-                if (isEdit) {
-                  await FirestoreService().updateChurch(
-                    parishId: widget.parishId, churchId: existing.id,
-                    name: nameCtrl.text.trim(), address: addressCtrl.text.trim(),
-                    contactPhone: phoneCtrl.text.trim(), contactEmail: emailCtrl.text.trim(),
-                    buildingType: buildingType, seatingCapacity: capacity,
-                  );
-                  if (dialogContext.mounted) Navigator.pop(dialogContext);
-                  await _reloadChurches();
-                } else {
-                  final newId = await FirestoreService().addChurch(
-                    parishId: widget.parishId,
-                    name: nameCtrl.text.trim(), address: addressCtrl.text.trim(),
-                    contactPhone: phoneCtrl.text.trim(), contactEmail: emailCtrl.text.trim(),
-                    buildingType: buildingType, seatingCapacity: capacity,
-                  );
-                  if (dialogContext.mounted) Navigator.pop(dialogContext);
-                  await _reloadChurches(selectId: newId);
-                }
-              },
-              child: Text(isEdit ? 'Save' : 'Add Church'),
-            ),
-          ],
-        ),
-      ),
+  /// Thin wrapper - the actual dialog now lives in church_form_dialogs.dart
+  /// so ParishDetailScreen and ChurchDetailScreen can open the exact same
+  /// one inline, without a trip through this screen at all.
+  Future<void> _showChurchForm(BuildContext context, {Church? existing}) {
+    return showChurchFormDialog(
+      context,
+      parishId: widget.parishId,
+      existing: existing,
+      onSaved: (id) => _reloadChurches(selectId: id),
     );
   }
 
-  /// Deliberately minimal - a school hall or community hall used for Mass
-  /// occasionally, sometimes only once. Name, address, capacity, and
-  /// basic accessibility notes are the only real questions; everything
-  /// heavier (building type, verification, church history) genuinely
-  /// doesn't apply here and isn't asked.
-  Future<void> _showVenueForm(BuildContext context) async {
-    final nameCtrl = TextEditingController();
-    final addressCtrl = TextEditingController();
-    final capacityCtrl = TextEditingController();
-    final accessibilityNotesCtrl = TextEditingController();
-
-    await showDialog(
-      context: context,
-      builder: (dialogContext) => AlertDialog(
-        backgroundColor: AppColors.paper,
-        title: const Text('Add Mass Venue', style: TextStyle(fontFamily: appSerif, fontSize: 18)),
-        content: SingleChildScrollView(
-          child: Column(
-            mainAxisSize: MainAxisSize.min,
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              const Text('For a school hall, community hall, or similar - not a full parish church.', style: TextStyle(fontSize: 11, color: Colors.black45, fontStyle: FontStyle.italic)),
-              const SizedBox(height: 10),
-              TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Venue name', hintText: 'e.g. Vredenburg Primary School Hall')),
-              TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'Address')),
-              TextField(controller: capacityCtrl, decoration: const InputDecoration(labelText: 'How many people can it seat?', hintText: 'e.g. 80'), keyboardType: TextInputType.number),
-              TextField(controller: accessibilityNotesCtrl, maxLines: 2, decoration: const InputDecoration(labelText: 'Accessibility notes (optional)', hintText: 'e.g. Ramp at side entrance, no steps')),
-            ],
-          ),
-        ),
-        actions: [
-          TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('Cancel')),
-          FilledButton(
-            style: FilledButton.styleFrom(backgroundColor: AppColors.brass),
-            onPressed: () async {
-              if (nameCtrl.text.trim().isEmpty || addressCtrl.text.trim().isEmpty) return;
-              final newId = await FirestoreService().addChurch(
-                parishId: widget.parishId,
-                name: nameCtrl.text.trim(), address: addressCtrl.text.trim(),
-                seatingCapacity: int.tryParse(capacityCtrl.text.trim()),
-                venueType: 'venue',
-              );
-              if (accessibilityNotesCtrl.text.trim().isNotEmpty) {
-                await FirestoreService().updateChurchAccessibility(widget.parishId, newId, {
-                  'wheelchairAccessible': 'unknown',
-                  'steps': 'unknown',
-                  'hasRamp': false,
-                  'accessibleParking': false,
-                  'hasAccessibleToilet': false,
-                  'notes': accessibilityNotesCtrl.text.trim(),
-                  'assistanceContactPhone': null,
-                });
-              }
-              if (dialogContext.mounted) Navigator.pop(dialogContext);
-              await _reloadChurches(selectId: newId);
-            },
-            child: const Text('Add Venue'),
-          ),
-        ],
-      ),
+  /// Same reasoning as _showChurchForm above.
+  Future<void> _showVenueForm(BuildContext context) {
+    return showVenueFormDialog(
+      context,
+      parishId: widget.parishId,
+      onSaved: (id) => _reloadChurches(selectId: id),
     );
   }
 

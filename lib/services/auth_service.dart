@@ -227,4 +227,20 @@ class AuthService {
         .get();
     return doc.data();
   }
+
+  /// True if the signed-in user can add/edit churches for [parishId] -
+  /// either a registered admin there, or a Super Admin/Developer (who
+  /// can manage every parish, same as firestore.rules' isSuperAdmin()
+  /// check). Used client-side to decide whether to show the inline
+  /// "add/edit church" controls directly on a parish/church page,
+  /// instead of making an admin go to the separate Admin Panel just to
+  /// fix a name or address - Firestore rules enforce this regardless.
+  Future<bool> canManageParish(String parishId) async {
+    final uid = currentUser?.uid;
+    if (uid == null) return false;
+    final userDoc = await _db.collection('users').doc(uid).get();
+    final data = userDoc.data();
+    if (data?['isSuperAdmin'] == true || data?['isDeveloper'] == true) return true;
+    return isAdminForParish(parishId);
+  }
 }

@@ -1,10 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:url_launcher/url_launcher.dart';
+import '../services/auth_service.dart';
 import '../services/firestore_service.dart';
 import '../models/parish.dart';
 import '../models/church.dart';
 import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
+import '../widgets/church_form_dialogs.dart';
 import 'church_detail_screen.dart';
 import '../widgets/hierarchy_summary_sections.dart';
 import 'search_screen.dart';
@@ -24,6 +26,21 @@ class ParishDetailScreen extends StatefulWidget {
 }
 
 class _ParishDetailScreenState extends State<ParishDetailScreen> {
+  // Gates the inline "+" next to Churches below - whether this account
+  // can add a church/venue to THIS parish (a registered admin there,
+  // or Super Admin/Developer). See AuthService.canManageParish for why
+  // this exists: so an admin looking at their own parish page doesn't
+  // have to leave it and go hunting for the separate Admin Panel.
+  bool _canManage = false;
+
+  @override
+  void initState() {
+    super.initState();
+    AuthService().canManageParish(widget.parishId).then((v) {
+      if (mounted) setState(() => _canManage = v);
+    });
+  }
+
   @override
   Widget build(BuildContext context) {
     return Scaffold(
@@ -117,7 +134,28 @@ class _ParishDetailScreenState extends State<ParishDetailScreen> {
                       child: Column(
                         crossAxisAlignment: CrossAxisAlignment.start,
                         children: [
-                          const SectionLabel(numeral: 'I', title: 'Churches'),
+                          SectionLabel(
+                            numeral: 'I',
+                            title: 'Churches',
+                            trailing: _canManage
+                                ? PopupMenuButton<String>(
+                                    tooltip: 'Add a church or Mass venue',
+                                    icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.brass),
+                                    padding: EdgeInsets.zero,
+                                    onSelected: (v) {
+                                      if (v == 'church') {
+                                        showChurchFormDialog(context, parishId: widget.parishId, onSaved: (_) => setState(() {}));
+                                      } else {
+                                        showVenueFormDialog(context, parishId: widget.parishId, onSaved: (_) => setState(() {}));
+                                      }
+                                    },
+                                    itemBuilder: (_) => const [
+                                      PopupMenuItem(value: 'church', child: Text('Add Church')),
+                                      PopupMenuItem(value: 'venue', child: Text('Add Mass Venue')),
+                                    ],
+                                  )
+                                : null,
+                          ),
                           AsyncSection<List<Church>>(
                             future: FirestoreService().getChurches(widget.parishId).then((l) => l.where((c) => c.isActive).toList()),
                             isEmpty: (l) => l.isEmpty,
