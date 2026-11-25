@@ -1,5 +1,7 @@
 {
   "projects": {
-    "default": "catholicsa-61b87"
+    "default": "catholicsa-61b87",
+    "production": "catholicsa-61b87",
+    "staging": "catholicsa-dev"
   }
 }

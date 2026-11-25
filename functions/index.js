@@ -1761,12 +1761,38 @@ exports.syncUsccbCitations = functions.runWith({ timeoutSeconds: 540, memory: "5
 // why that's fine: this check is a logged warning, never a hard reject.
 const PAYFAST_NOTIFY_HOSTNAMES = ["www.payfast.co.za", "sandbox.payfast.co.za", "w1w.payfast.co.za", "w2w.payfast.co.za"];
 
+// Which Firebase project this code is deployed to. The same functions
+// code deploys to both production (catholicsa-61b87) and staging
+// (catholicsa-dev) - see .firebaserc / deploy.yml - so anything that
+// embeds the project id has to read it at runtime rather than hardcode
+// production's. firebase-tools sets FIREBASE_CONFIG/GCLOUD_PROJECT both
+// at deploy time and in the deployed runtime; the fallback keeps
+// behaviour identical to before if neither is ever present.
+const PRODUCTION_PROJECT_ID = "catholicsa-61b87";
+function currentProjectId() {
+  try {
+    const cfg = process.env.FIREBASE_CONFIG ? JSON.parse(process.env.FIREBASE_CONFIG) : null;
+    if (cfg && cfg.projectId) return cfg.projectId;
+  } catch (_) {
+    // Fall through to GCLOUD_PROJECT below.
+  }
+  return process.env.GCLOUD_PROJECT || PRODUCTION_PROJECT_ID;
+}
+const PROJECT_ID = currentProjectId();
+
 // This project's actual Cloud Functions base URL (region + project id) -
-// fixed/deterministic, not a secret. If this project is ever renamed or
-// functions moved to a different region, this one line is what needs
-// updating (and the notify_url re-saved with PayFast for any parish
-// already using it, since PayFast calls back whatever URL we send).
-const PAYFAST_NOTIFY_URL = "https://us-central1-catholicsa-61b87.cloudfunctions.net/payfastNotify";
+// fixed/deterministic, not a secret. If functions are ever moved to a
+// different region, this is what needs updating (and the notify_url
+// re-saved with PayFast for any parish already using it, since PayFast
+// calls back whatever URL we send).
+const PAYFAST_NOTIFY_URL = `https://us-central1-${PROJECT_ID}.cloudfunctions.net/payfastNotify`;
+
+// Where PayFast sends the buyer back to afterwards. Production has its
+// own domain; staging (or any other project) uses its default Hosting
+// URL, so a test checkout on the dev site lands back on the dev site.
+const PAYFAST_RETURN_URL = PROJECT_ID === PRODUCTION_PROJECT_ID ?
+  "https://catholicsa.co.za/" :
+  `https://${PROJECT_ID}.web.app/`;
 
 /**
  * PayFast (and several community guides) use PHP's urlencode() rules for
@@ -1904,8 +1930,8 @@ exports.createPayfastPayment = functions.https.onCall(async (data, context) => {
   const pairs = [
     ["merchant_id", gateway.payfastMerchantId],
     ["merchant_key", gateway.payfastMerchantKey],
-    ["return_url", "https://catholicsa.co.za/"],
-    ["cancel_url", "https://catholicsa.co.za/"],
+    ["return_url", PAYFAST_RETURN_URL],
+    ["cancel_url", PAYFAST_RETURN_URL],
     ["notify_url", PAYFAST_NOTIFY_URL],
     ["name_first", nameFirst],
     ["name_last", nameLast],
@@ -2057,4 +2083,4 @@ exports.payfastNotify = functions.https.onRequest(async (req, res) => {
     // it's logged above for a human to go find.
     res.status(200).send("OK");
   }
-});
+});
