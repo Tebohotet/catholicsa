@@ -130,7 +130,23 @@ class _HomeScreenState extends State<HomeScreen> {
       // 6 (now 4) tab roots for collisions, like the original comment
       // here claimed, was never actually enough - there are dozens of
       // pushed screens underneath them.
-      observers: [_TabNavObserver(() { if (mounted) setState(() {}); })],
+      // addPostFrameCallback, not a direct setState() - real crash found
+      // tonight on a Windows flutter run (not seen on the deployed web
+      // build, which strips this assert() in --release mode, but a real
+      // bug either way): each tab's Navigator fires didPush on itself
+      // during its OWN first build (NavigatorState.restoreState ->
+      // didChangeDependencies, on initial mount), which happens *while*
+      // HomeScreen's IndexedStack is still building all 4 tab Navigators
+      // at once - calling setState() on the ancestor HomeScreen DURING
+      // that build throws "setState() or markNeedsBuild() called during
+      // build". Deferring to after the current frame is the standard
+      // fix for a NavigatorObserver wanting to update an ancestor.
+      observers: [_TabNavObserver(() {
+        if (!mounted) return;
+        WidgetsBinding.instance.addPostFrameCallback((_) {
+          if (mounted) setState(() {});
+        });
+      })],
       onGenerateRoute: (settings) => MaterialPageRoute(builder: (_) => _tabRoots[index]),
     );
   }
