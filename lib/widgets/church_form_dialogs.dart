@@ -1,6 +1,8 @@
 import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:cloud_firestore/cloud_firestore.dart' show GeoPoint;
 import 'package:image_picker/image_picker.dart';
+import 'package:geolocator/geolocator.dart';
 import '../models/church.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
@@ -37,6 +39,13 @@ Future<void> showChurchFormDialog(
   XFile? pickedPhoto;
   Uint8List? pickedPhotoBytes;
   String? existingPhotoUrl = existing?.photoUrl;
+  // (0,0) is the "not set yet" sentinel addChurch/the Church model use
+  // (see firestore_service.dart's addChurch doc comment) - only treat an
+  // existing church's geopoint as real if it isn't that sentinel.
+  GeoPoint? pickedGeopoint = (existing != null && !(existing.geopoint.latitude == 0 && existing.geopoint.longitude == 0))
+      ? existing.geopoint
+      : null;
+  bool gettingLocation = false;
 
   await showDialog(
     context: context,
@@ -94,9 +103,61 @@ Future<void> showChurchFormDialog(
                 ],
                 onChanged: (v) => setDialogState(() => buildingType = v!),
               ),
-              const Padding(
-                padding: EdgeInsets.only(top: 10),
-                child: Text('GPS location, accessibility details, and amenities can be added afterward from the Admin Panel - this gets the church listed so you can start adding Mass times right away.', style: TextStyle(fontSize: 11, color: Colors.black45, fontStyle: FontStyle.italic)),
+              const SizedBox(height: 10),
+              // Same Geolocator flow as AdminPanelScreen's "I'm at the
+              // church - use this location" button (see
+              // _ChurchVerificationSection._useCurrentLocation) - just
+              // reachable right here too, so adding/editing a church and
+              // setting its real GPS can be one step instead of two when
+              // you're standing at the location anyway. That separate
+              // Admin Panel button still exists for setting it later, if
+              // you're entering the church's details from a desk instead.
+              Row(
+                children: [
+                  OutlinedButton.icon(
+                    style: OutlinedButton.styleFrom(foregroundColor: AppColors.brass, side: const BorderSide(color: AppColors.brass), minimumSize: const Size(0, 32)),
+                    onPressed: gettingLocation ? null : () async {
+                      setDialogState(() => gettingLocation = true);
+                      try {
+                        if (!await Geolocator.isLocationServiceEnabled()) {
+                          throw 'Turn on Location Services on this device first.';
+                        }
+                        var permission = await Geolocator.checkPermission();
+                        if (permission == LocationPermission.denied) {
+                          permission = await Geolocator.requestPermission();
+                        }
+                        if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
+                          throw 'Location permission was denied.';
+                        }
+                        final pos = await Geolocator.getCurrentPosition();
+                        setDialogState(() => pickedGeopoint = GeoPoint(pos.latitude, pos.longitude));
+                      } catch (e) {
+                        if (dialogContext.mounted) {
+                          ScaffoldMessenger.of(dialogContext).showSnackBar(SnackBar(content: Text('Could not get location: $e')));
+                        }
+                      } finally {
+                        setDialogState(() => gettingLocation = false);
+                      }
+                    },
+                    icon: gettingLocation
+                        ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2))
+                        : const Icon(Icons.my_location, size: 16),
+                    label: Text(gettingLocation ? 'Getting location...' : "I'm here now - use this location", style: const TextStyle(fontSize: 12)),
+                  ),
+                  if (pickedGeopoint != null) ...[
+                    const SizedBox(width: 8),
+                    const Icon(Icons.check_circle, size: 16, color: AppColors.sage),
+                  ],
+                ],
+              ),
+              Padding(
+                padding: const EdgeInsets.only(top: 10),
+                child: Text(
+                  pickedGeopoint != null
+                      ? 'Location set - it\'ll show on the Map once saved. Accessibility details and amenities can still be added afterward from the Admin Panel.'
+                      : 'GPS is optional here - some churches aren\'t in a known location yet. Skip it and the church still gets listed in Browse; set it later from the Admin Panel once someone can stand at the actual building.',
+                  style: const TextStyle(fontSize: 11, color: Colors.black45, fontStyle: FontStyle.italic),
+                ),
               ),
             ],
           ),
@@ -112,6 +173,7 @@ Future<void> showChurchFormDialog(
                 await FirestoreService().updateChurch(
                   parishId: parishId, churchId: existing.id,
                   name: nameCtrl.text.trim(), address: addressCtrl.text.trim(),
+                  geopoint: pickedGeopoint,
                   contactPhone: phoneCtrl.text.trim(), contactEmail: emailCtrl.text.trim(),
                   buildingType: buildingType, seatingCapacity: capacity,
                 );
@@ -124,6 +186,7 @@ Future<void> showChurchFormDialog(
                 final newId = await FirestoreService().addChurch(
                   parishId: parishId,
                   name: nameCtrl.text.trim(), address: addressCtrl.text.trim(),
+                  geopoint: pickedGeopoint,
                   contactPhone: phoneCtrl.text.trim(), contactEmail: emailCtrl.text.trim(),
                   buildingType: buildingType, seatingCapacity: capacity,
                 );
