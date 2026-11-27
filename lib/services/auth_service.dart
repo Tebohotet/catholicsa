@@ -216,6 +216,19 @@ class AuthService {
 
   /// Returns the admin doc (role, verified status) for the current user
   /// at a given parish, or null if they aren't an admin there.
+  ///
+  /// Super Admin/Developer gets a synthetic full-access profile here even
+  /// with no registered admins/{uid} doc for this specific parish - the
+  /// project owner's own ask ("Can't I be admin of all Parish"), and the
+  /// same reasoning canManageParish already uses: a Super Admin can
+  /// manage every parish per firestore.rules' isSuperAdmin(), so the
+  /// client-side profile AdminPanelScreen reads to decide what to show
+  /// (priest-only sections like Payment Settings, the finance toggle,
+  /// verifying a church) should agree, not silently come back null and
+  /// hide those just because no one ever added this account to that one
+  /// parish's admins subcollection. Firestore rules are what actually
+  /// enforce every write regardless - this only changes what the UI
+  /// offers to someone who could do it anyway.
   Future<Map<String, dynamic>?> getAdminProfile(String parishId) async {
     final uid = currentUser?.uid;
     if (uid == null) return null;
@@ -225,7 +238,21 @@ class AuthService {
         .collection('admins')
         .doc(uid)
         .get();
-    return doc.data();
+    if (doc.exists) return doc.data();
+
+    final userDoc = await _db.collection('users').doc(uid).get();
+    final userData = userDoc.data();
+    if (userData?['isSuperAdmin'] == true || userData?['isDeveloper'] == true) {
+      return {
+        'role': 'priest',
+        'displayName': userData?['displayName'] ?? 'Super Admin',
+        'email': userData?['email'] ?? '',
+        'status': 'active',
+        'verified': true,
+        'synthetic': true, // not a real admins/{uid} doc - see above
+      };
+    }
+    return null;
   }
 
   /// True if the signed-in user can add/edit churches for [parishId] -

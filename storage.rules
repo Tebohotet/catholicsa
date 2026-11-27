@@ -7,6 +7,16 @@ service firebase.storage {
       allow write: if request.auth != null;
     }
 
+    // A single admin-set display photo, written directly as
+    // churches/{parishId}/{churchId}/photo.{ext} (not inside the media/
+    // subfolder above, which is the moderated visitor gallery instead -
+    // see FirestoreService.setChurchPhoto). Same public-read/signed-in-
+    // write tier as media above.
+    match /churches/{parishId}/{churchId}/{fileName} {
+      allow read: if true;
+      allow write: if request.auth != null && fileName.matches('photo[.].*');
+    }
+
     // Proof-of-payment screenshots can contain bank statement details, so
     // this is deliberately NOT public read like media above - signed-in
     // only. Same defense-in-depth note applies: the real gate is that only

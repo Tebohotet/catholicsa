@@ -3,13 +3,11 @@ import 'map_screen.dart';
 import 'browse_screen.dart';
 import 'readings_screen.dart';
 import 'hymns_screen.dart';
-import 'account_screen.dart';
 import 'church_detail_screen.dart';
-import 'messaging/messages_inbox_screen.dart';
 import '../services/notification_service.dart';
 import '../services/firestore_service.dart';
-import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/profile_menu_button.dart';
 import '../app.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -188,13 +186,21 @@ class _HomeScreenState extends State<HomeScreen> {
             // page, a profile, anything) this hides itself instead of
             // sitting on top of that screen's own controls - see
             // _atTabRoot and the observer in _buildTabNavigator above.
-            if (_atTabRoot)
+            //
+            // Also excluded on index 2 (Readings) specifically - that tab
+            // root has its own pencil/music/book icons in its own header,
+            // which this floating button used to sit on top of (a second,
+            // different overlap bug from the one _atTabRoot fixes, since
+            // Readings IS a tab root, not a pushed screen). ReadingsScreen
+            // embeds the same ProfileMenuButton inline in that header Row
+            // instead - see readings_screen.dart.
+            if (_atTabRoot && _index != 2)
               SafeArea(
                 child: Align(
                   alignment: Alignment.topRight,
                   child: Padding(
                     padding: const EdgeInsets.all(8),
-                    child: const _ProfileMenuButton(),
+                    child: const ProfileMenuButton(),
                   ),
                 ),
               ),
@@ -231,59 +237,7 @@ class _TabNavObserver extends NavigatorObserver {
   void didReplace({Route? newRoute, Route? oldRoute}) => onChange();
 }
 
-/// The replacement for the old Account tab: a small, often-hidden button,
-/// top-right, that opens a 3-item menu - "My Profile" (the Account screen,
-/// unchanged), "Messages" (the inbox), "Log out" - exactly the 3 items the
-/// project owner asked for. Pushed onto the *root* navigator (above the
-/// bottom nav entirely, via navigatorKey[0]'s ancestor) rather than onto
-/// any one tab's own stack, so it opens the same way and pops back to
-/// whichever tab was showing, regardless of which tab that is.
-class _ProfileMenuButton extends StatelessWidget {
-  const _ProfileMenuButton();
-
-  Future<void> _signOut(BuildContext context) async {
-    try {
-      await AuthService().signOut();
-    } catch (e) {
-      if (context.mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Sign out failed: $e')));
-      }
-    }
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    return Material(
-      color: AppColors.paper,
-      shape: const CircleBorder(),
-      elevation: 3,
-      child: PopupMenuButton<String>(
-        tooltip: 'Account menu',
-        icon: const Icon(Icons.person, color: AppColors.stone),
-        onSelected: (value) {
-          // rootNavigator: true climbs past the tab's own Navigator to
-          // the one HomeScreen itself lives in, so this opens as a full
-          // page over the whole bottom-nav shell - not nested a second
-          // level deep inside whichever tab happened to be open.
-          final root = Navigator.of(context, rootNavigator: true);
-          switch (value) {
-            case 'profile':
-              root.push(MaterialPageRoute(builder: (_) => const AccountScreen()));
-              break;
-            case 'messages':
-              root.push(MaterialPageRoute(builder: (_) => const MessagesInboxScreen()));
-              break;
-            case 'logout':
-              _signOut(context);
-              break;
-          }
-        },
-        itemBuilder: (context) => const [
-          PopupMenuItem(value: 'profile', child: ListTile(leading: Icon(Icons.person_outline), title: Text('My Profile'), contentPadding: EdgeInsets.zero)),
-          PopupMenuItem(value: 'messages', child: ListTile(leading: Icon(Icons.chat_bubble_outline), title: Text('Messages'), contentPadding: EdgeInsets.zero)),
-          PopupMenuItem(value: 'logout', child: ListTile(leading: Icon(Icons.logout, color: Colors.redAccent), title: Text('Log out', style: TextStyle(color: Colors.redAccent)), contentPadding: EdgeInsets.zero)),
-        ],
-      ),
-    );
-  }
-}
+// ProfileMenuButton itself now lives in ../widgets/profile_menu_button.dart
+// (pulled out of this file so ReadingsScreen can embed it too - see that
+// file's doc comment for why a shared file, not a cross-import between
+// these two screens, was the right fix).

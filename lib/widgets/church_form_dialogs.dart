@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:image_picker/image_picker.dart';
 import '../models/church.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
@@ -28,6 +30,13 @@ Future<void> showChurchFormDialog(
   final emailCtrl = TextEditingController(text: existing?.contactEmail ?? '');
   final capacityCtrl = TextEditingController(text: existing?.seatingCapacity?.toString() ?? '');
   String buildingType = existing?.buildingType ?? 'Church';
+  // Picked here, uploaded after the church doc itself is saved below - a
+  // brand new church doesn't have a churchId (so nowhere to upload to)
+  // until addChurch() returns one. existingPhotoUrl just reflects what's
+  // already there until/unless a new photo is picked.
+  XFile? pickedPhoto;
+  Uint8List? pickedPhotoBytes;
+  String? existingPhotoUrl = existing?.photoUrl;
 
   await showDialog(
     context: context,
@@ -40,6 +49,33 @@ Future<void> showChurchFormDialog(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
             children: [
+              Center(
+                child: GestureDetector(
+                  onTap: () async {
+                    final picked = await ImagePicker().pickImage(source: ImageSource.gallery, maxWidth: 1600, imageQuality: 85);
+                    if (picked == null) return;
+                    final bytes = await picked.readAsBytes();
+                    setDialogState(() {
+                      pickedPhoto = picked;
+                      pickedPhotoBytes = bytes;
+                    });
+                  },
+                  child: Container(
+                    width: 96, height: 96,
+                    decoration: BoxDecoration(
+                      color: AppColors.paperDark,
+                      borderRadius: BorderRadius.circular(12),
+                      image: pickedPhotoBytes != null
+                          ? DecorationImage(image: MemoryImage(pickedPhotoBytes!), fit: BoxFit.cover)
+                          : (existingPhotoUrl != null ? DecorationImage(image: NetworkImage(existingPhotoUrl!), fit: BoxFit.cover) : null),
+                    ),
+                    child: (pickedPhotoBytes == null && existingPhotoUrl == null)
+                        ? const Icon(Icons.add_a_photo_outlined, color: AppColors.stone)
+                        : null,
+                  ),
+                ),
+              ),
+              const Center(child: Padding(padding: EdgeInsets.only(top: 4, bottom: 10), child: Text('Tap to add/change photo (optional)', style: TextStyle(fontSize: 11, color: Colors.black45)))),
               TextField(controller: nameCtrl, decoration: const InputDecoration(labelText: 'Church name', hintText: 'e.g. St Jude Catholic Church')),
               TextField(controller: addressCtrl, decoration: const InputDecoration(labelText: 'Address')),
               TextField(controller: phoneCtrl, decoration: const InputDecoration(labelText: 'Contact phone (optional)')),
@@ -79,6 +115,9 @@ Future<void> showChurchFormDialog(
                   contactPhone: phoneCtrl.text.trim(), contactEmail: emailCtrl.text.trim(),
                   buildingType: buildingType, seatingCapacity: capacity,
                 );
+                if (pickedPhoto != null) {
+                  await FirestoreService().setChurchPhoto(parishId: parishId, churchId: existing.id, file: pickedPhoto!);
+                }
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
                 onSaved(existing.id);
               } else {
@@ -88,6 +127,9 @@ Future<void> showChurchFormDialog(
                   contactPhone: phoneCtrl.text.trim(), contactEmail: emailCtrl.text.trim(),
                   buildingType: buildingType, seatingCapacity: capacity,
                 );
+                if (pickedPhoto != null) {
+                  await FirestoreService().setChurchPhoto(parishId: parishId, churchId: newId, file: pickedPhoto!);
+                }
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
                 onSaved(newId);
               }

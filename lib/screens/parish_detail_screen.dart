@@ -10,7 +10,7 @@ import '../widgets/church_form_dialogs.dart';
 import 'church_detail_screen.dart';
 import '../widgets/hierarchy_summary_sections.dart';
 import 'search_screen.dart';
-import 'admin_panel_screen.dart' show ParishVisibilitySection;
+import 'admin_panel_screen.dart' show ParishVisibilitySection, AdminPanelScreen;
 
 /// One level up from ChurchDetailScreen - same shape (header, quick actions,
 /// section list) but everything below the header is aggregated from every
@@ -148,6 +148,32 @@ class _ParishDetailScreenState extends State<ParishDetailScreen> {
                           // you're personally an admin of.
                           if (_canManage) ...[
                             ParishVisibilitySection(parishId: widget.parishId),
+                            const SizedBox(height: 10),
+                            // The project owner's own ask: being a Super
+                            // Admin should be enough to manage ANY parish
+                            // from right here in Browse, not just the
+                            // one-off toggle above - without this, the
+                            // Admin Panel (GPS-setting, verification,
+                            // finance, payment settings, and everything
+                            // else in it) was only ever reachable via the
+                            // Account screen's "Admin Of" list, which only
+                            // lists parishes you're personally registered
+                            // as admin of. A Super Admin exploring Browse
+                            // and landing on a parish they aren't
+                            // personally registered for had no way in at
+                            // all. See AuthService.getAdminProfile for the
+                            // matching fix that makes everything *inside*
+                            // the Admin Panel also work correctly once
+                            // you're here as a Super Admin, not just
+                            // reachable.
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(foregroundColor: AppColors.brass, side: const BorderSide(color: AppColors.brass)),
+                              onPressed: () => Navigator.push(context, MaterialPageRoute(
+                                builder: (_) => AdminPanelScreen(parishId: widget.parishId),
+                              )),
+                              icon: const Icon(Icons.admin_panel_settings_outlined, size: 16),
+                              label: const Text('Manage this parish'),
+                            ),
                             const SizedBox(height: 20),
                           ],
                           SectionLabel(
@@ -179,7 +205,13 @@ class _ParishDetailScreenState extends State<ParishDetailScreen> {
                             builder: (context, churches) => Column(
                               children: churches.map((c) => ListTile(
                                 contentPadding: EdgeInsets.zero,
-                                leading: const Icon(Icons.church, color: AppColors.brass, size: 20),
+                                leading: c.photoUrl != null
+                                    ? ClipRRect(
+                                        borderRadius: BorderRadius.circular(6),
+                                        child: Image.network(c.photoUrl!, width: 36, height: 36, fit: BoxFit.cover,
+                                            errorBuilder: (_, __, ___) => const Icon(Icons.church, color: AppColors.brass, size: 20)),
+                                      )
+                                    : const Icon(Icons.church, color: AppColors.brass, size: 20),
                                 title: Text(c.name),
                                 subtitle: Text(c.address, maxLines: 1, overflow: TextOverflow.ellipsis),
                                 trailing: const Icon(Icons.chevron_right, size: 18),

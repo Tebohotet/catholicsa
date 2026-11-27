@@ -338,6 +338,29 @@ class FirestoreService {
     });
   }
 
+  /// Display photo for a church's own page / Browse thumbnail - a single
+  /// admin-curated photo, deliberately separate from the moderated
+  /// `media` gallery (uploadMedia below): no pending/approved workflow,
+  /// since this is the admin setting their own church's photo, not a
+  /// visitor submitting one. Re-uploading overwrites the same storage
+  /// path, so old photos don't pile up in Storage every time it's changed.
+  /// Same XFile.readAsBytes()+putData() approach as uploadMedia - putFile
+  /// doesn't work on Flutter web.
+  Future<void> setChurchPhoto({
+    required String parishId,
+    required String churchId,
+    required XFile file,
+  }) async {
+    final bytes = await file.readAsBytes();
+    final ext = file.name.contains('.') ? file.name.split('.').last : 'jpg';
+    final storagePath = 'churches/$parishId/$churchId/photo.$ext';
+    final ref = FirebaseStorage.instance.ref(storagePath);
+    await ref.putData(bytes, SettableMetadata(contentType: 'image/jpeg'));
+    final url = await ref.getDownloadURL();
+    await _db.collection('parishes').doc(parishId).collection('churches').doc(churchId)
+        .update({'photoUrl': url});
+  }
+
   Future<void> updateChurchAccessibility(String parishId, String churchId, Map<String, dynamic> accessibility) async {
     await _db.collection('parishes').doc(parishId).collection('churches').doc(churchId)
         .update({'accessibility': accessibility});

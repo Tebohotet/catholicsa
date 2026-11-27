@@ -12,6 +12,7 @@ import '../app.dart';
 import '../providers/view_as_role_provider.dart';
 import '../widgets/share_button.dart';
 import '../widgets/app_calendar.dart';
+import '../widgets/profile_menu_button.dart';
 import '../utils/bible_citation_parser.dart';
 import '../utils/psalm_numbering.dart';
 import 'bible_screen.dart';
@@ -234,6 +235,15 @@ class _ReadingsScreenState extends ConsumerState<ReadingsScreen> with RouteAware
                         icon: const Icon(Icons.menu_book_outlined, color: Colors.white),
                         onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const BibleScreen())),
                       ),
+                      // Embedded, not floating - this tab root already
+                      // has its own icons right here in this Row
+                      // (edit/Hymns/Bible above). HomeScreen's own
+                      // floating profile button used to sit on top of
+                      // these; it now skips the Readings tab specifically
+                      // and this embedded copy takes its place instead,
+                      // in the flow of the same Row rather than floating
+                      // over it. See home_screen.dart's _index != 2 check.
+                      const ProfileMenuButton(embedded: true),
                     ],
                   ),
                   const SizedBox(height: 14),

@@ -19,6 +19,7 @@ class Church {
   final int? seatingCapacity;
   final String venueType; // "church" | "venue" - a venue is a school hall, community hall, or similar - Mass held there occasionally, sometimes only once. Same underlying model and features (services, accessibility, capacity, RSVP), deliberately without the weight of full church history/verification, which doesn't apply to a one-off space.
   final bool isActive; // false = hidden from the public map/lists while an admin is still fixing it up in person - still fully visible and editable from the admin panel. Defaults true so nothing already live disappears the moment this field shipped.
+  final String? photoUrl; // Admin-uploaded display photo - shown on the church's own page and as a thumbnail in Browse, in place of the generic church icon. Nullable: most churches won't have one entered yet.
 
   Church({
     required this.id,
@@ -37,6 +38,7 @@ class Church {
     this.seatingCapacity,
     this.venueType = 'church',
     this.isActive = true,
+    this.photoUrl,
   });
 
   factory Church.fromFirestore(String id, Map<String, dynamic> data) {
@@ -58,6 +60,7 @@ class Church {
       seatingCapacity: (data['seatingCapacity'] as num?)?.toInt(),
       venueType: data['venueType'] as String? ?? 'church',
       isActive: data['isActive'] as bool? ?? true,
+      photoUrl: data['photoUrl'] as String?,
     );
   }
 
@@ -77,6 +80,7 @@ class Church {
         'seatingCapacity': seatingCapacity,
         'venueType': venueType,
         'isActive': isActive,
+        'photoUrl': photoUrl,
       };
 }
 

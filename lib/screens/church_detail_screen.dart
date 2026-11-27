@@ -123,7 +123,18 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
                     ),
                     child: Stack(
                       children: [
-                        if (_previewPhotos)
+                        if (church.photoUrl != null)
+                          Positioned.fill(
+                            child: Stack(
+                              fit: StackFit.expand,
+                              children: [
+                                Image.network(church.photoUrl!, fit: BoxFit.cover,
+                                    errorBuilder: (_, __, ___) => const SizedBox.shrink()),
+                                Container(color: Colors.black.withValues(alpha: 0.35)),
+                              ],
+                            ),
+                          )
+                        else if (_previewPhotos)
                           Positioned.fill(
                             child: Stack(
                               fit: StackFit.expand,
@@ -169,9 +180,19 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
                                         border: Border.all(color: AppColors.brass, width: 2),
                                       ),
                                       child: ClipOval(
-                                        child: _previewPhotos
-                                            ? Image.network(_sampleLogo, fit: BoxFit.cover, width: 56, height: 56)
-                                            : Icon(_buildingIcon(church.buildingType), color: AppColors.stone, size: 24),
+                                        // A real admin-uploaded photo (see
+                                        // church_form_dialogs.dart) always
+                                        // wins over the _previewPhotos
+                                        // sample/placeholder below, which
+                                        // only exists to preview layout
+                                        // for churches with no real photo
+                                        // entered yet.
+                                        child: church.photoUrl != null
+                                            ? Image.network(church.photoUrl!, fit: BoxFit.cover, width: 56, height: 56,
+                                                errorBuilder: (_, __, ___) => Icon(_buildingIcon(church.buildingType), color: AppColors.stone, size: 24))
+                                            : (_previewPhotos
+                                                ? Image.network(_sampleLogo, fit: BoxFit.cover, width: 56, height: 56)
+                                                : Icon(_buildingIcon(church.buildingType), color: AppColors.stone, size: 24)),
                                       ),
                                     ),
                                     const SizedBox(width: 14),
