@@ -1,13 +1,20 @@
 name: Build and Deploy
 
-# Runs on every push to main - analyze and test first, only deploy if
-# both pass. A broken build should never reach production because the
-# deploy step ran regardless of what came before it.
+# Runs on every push to main or develop - analyze and test first, only
+# deploy if both pass. A broken build should never reach production
+# because the deploy step ran regardless of what came before it.
+#
+# Two environments, same code, different Firebase project:
+#   push to main    -> production (catholicsa-61b87), secret FIREBASE_SERVICE_ACCOUNT
+#   push to develop -> staging    (catholicsa-dev),   secret FIREBASE_SERVICE_ACCOUNT_DEV
+# The web build is told which one it is via --dart-define=APP_ENV (see
+# lib/config/app_environment.dart), so the staging site talks only to the
+# dev project's Firestore/Auth/Storage - no shared data with production.
 on:
   push:
-    branches: [main]
+    branches: [main, develop]
   pull_request:
-    branches: [main]
+    branches: [main, develop]
 
 jobs:
   build_and_test:
@@ -30,8 +37,23 @@ jobs:
       - name: Run tests
         run: flutter test
 
+      # Staging builds need the dev project's generated client config.
+      # Fail loudly here rather than deploy a site that crashes on load.
+      - name: Check staging Firebase config exists
+        if: github.ref == 'refs/heads/develop' && github.event_name == 'push'
+        run: |
+          if grep -q "PLACEHOLDER - NOT YET GENERATED" lib/firebase_options_dev.dart; then
+            echo "::error::lib/firebase_options_dev.dart is still the placeholder. Run 'flutterfire configure --project=catholicsa-dev --out=lib/firebase_options_dev.dart' and commit the result."
+            exit 1
+          fi
+
       - name: Build web
-        run: flutter build web --release
+        run: |
+          if [ "${{ github.ref }}" = "refs/heads/develop" ] && [ "${{ github.event_name }}" = "push" ]; then
+            flutter build web --release --dart-define=APP_ENV=staging
+          else
+            flutter build web --release
+          fi
 
       - name: Upload web build artifact
         uses: actions/upload-artifact@v4
@@ -41,12 +63,14 @@ jobs:
           retention-days: 1
 
   deploy:
-    name: Deploy to Firebase
+    name: Deploy to Firebase (${{ github.ref == 'refs/heads/main' && 'production' || 'staging' }})
     needs: build_and_test
-    # Only deploys on an actual push to main, never on a pull request -
-    # a PR only needs the build/test job above to pass for review.
-    if: github.ref == 'refs/heads/main' && github.event_name == 'push'
+    # Only deploys on an actual push to main/develop, never on a pull
+    # request - a PR only needs the build/test job above to pass for review.
+    if: (github.ref == 'refs/heads/main' || github.ref == 'refs/heads/develop') && github.event_name == 'push'
     runs-on: ubuntu-latest
+    env:
+      FIREBASE_PROJECT: ${{ github.ref == 'refs/heads/main' && 'catholicsa-61b87' || 'catholicsa-dev' }}
     steps:
       - uses: actions/checkout@v4
 
@@ -75,9 +99,12 @@ jobs:
         id: auth
         uses: google-github-actions/auth@v2
         with:
-          credentials_json: ${{ secrets.FIREBASE_SERVICE_ACCOUNT }}
+          #
+          # Each project has its own deploy service account + secret, so
+          # a leaked/misused staging key can never touch production.
+          credentials_json: ${{ github.ref == 'refs/heads/main' && secrets.FIREBASE_SERVICE_ACCOUNT || secrets.FIREBASE_SERVICE_ACCOUNT_DEV }}
 
       - name: Deploy to Firebase
-        run: npx firebase-tools deploy --only hosting,functions,firestore:rules,firestore:indexes,storage --project catholicsa-61b87 --non-interactive
+        run: npx firebase-tools deploy --only hosting,functions,firestore:rules,firestore:indexes,storage --project "$FIREBASE_PROJECT" --non-interactive
         env:
           GOOGLE_APPLICATION_CREDENTIALS: ${{ steps.auth.outputs.credentials_file_path }}
