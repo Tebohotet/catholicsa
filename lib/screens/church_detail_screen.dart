@@ -12,6 +12,7 @@ import '../widgets/share_button.dart';
 import '../widgets/async_section.dart';
 import '../widgets/church_form_dialogs.dart';
 import 'parish_detail_screen.dart';
+import 'admin_panel_screen.dart' show AdminPanelScreen;
 import 'course_list_screen.dart';
 import 'church_detail/map_popup.dart';
 import 'church_detail/horarium_section.dart';
@@ -296,6 +297,26 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
                                 ),
                             ],
                           ),
+                          // Same reasoning as ParishDetailScreen's "Manage
+                          // this parish" button - turning "Visible on
+                          // public map" on/off, Mass times, Confession
+                          // Bookings, and Mass Intention Requests already
+                          // exist in the Admin Panel; this is the one-tap
+                          // path there from the church's own page, with
+                          // this exact church pre-selected (see
+                          // initialChurchId on AdminPanelScreen) instead
+                          // of whichever church happened to be first.
+                          if (_canManage) ...[
+                            const SizedBox(height: 4),
+                            OutlinedButton.icon(
+                              style: OutlinedButton.styleFrom(foregroundColor: AppColors.brass, side: const BorderSide(color: AppColors.brass)),
+                              onPressed: () => Navigator.push(context, MaterialPageRoute(
+                                builder: (_) => AdminPanelScreen(parishId: parishId, initialChurchId: church.id),
+                              )),
+                              icon: const Icon(Icons.admin_panel_settings_outlined, size: 16),
+                              label: const Text('Manage this church — visibility, Mass times, confessions, intentions'),
+                            ),
+                          ],
                           const SizedBox(height: 4),
                           Row(
                             children: [

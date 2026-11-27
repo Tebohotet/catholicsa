@@ -16,7 +16,15 @@ import 'lesson_editor_screen.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   final String parishId;
-  const AdminPanelScreen({super.key, required this.parishId});
+  // Set when arriving from a specific church's own page (see the
+  // "Manage this church" button on ChurchDetailScreen) so that church
+  // is pre-selected in the dropdown below instead of just whichever one
+  // happens to be first in the list - the project owner's own ask: "I
+  // need to be able to add mass times, booked confessions, mass
+  // intentions, all of that on this page if I own it" - this is the
+  // one-tap path there from the church's own page.
+  final String? initialChurchId;
+  const AdminPanelScreen({super.key, required this.parishId, this.initialChurchId});
 
   @override
   State<AdminPanelScreen> createState() => _AdminPanelScreenState();
@@ -32,7 +40,14 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
   void initState() {
     super.initState();
     FirestoreService().getChurches(widget.parishId).then((list) {
-      if (mounted) setState(() { _churches = list; _selectedChurchId = list.isNotEmpty ? list.first.id : null; });
+      if (mounted) {
+        setState(() {
+          _churches = list;
+          _selectedChurchId = (widget.initialChurchId != null && list.any((c) => c.id == widget.initialChurchId))
+              ? widget.initialChurchId
+              : (list.isNotEmpty ? list.first.id : null);
+        });
+      }
     });
     AuthService().getAdminProfile(widget.parishId).then((profile) {
       if (mounted) setState(() { _role = profile?['role'] as String?; });

@@ -23,7 +23,27 @@ import '../theme/app_theme.dart';
 /// them (the exact overlap bug this embedded mode fixes).
 class ProfileMenuButton extends StatelessWidget {
   final bool embedded;
-  const ProfileMenuButton({super.key, this.embedded = false});
+  // Which tab's Navigator Account/Messages should push onto - passed in
+  // by HomeScreen's floating overlay (see home_screen.dart) as whichever
+  // tab's own key is current, since the floating button itself sits in
+  // a Stack *beside* the tab Navigators, not nested inside any one of
+  // them, so plain Navigator.of(context) from there would miss all four
+  // and climb straight past the bottom nav bar. Left null for the
+  // embedded case (ReadingsScreen) - that usage already sits *inside*
+  // its own tab's Navigator, so the plain Navigator.of(context) fallback
+  // below already finds the right one with no key needed.
+  //
+  // Previously this always used rootNavigator: true, which opened Account/
+  // Messages as a full page over the whole bottom-nav shell - the project
+  // owner's own bug report: "On every page I need the bottom nav... Right
+  // now when I am at log in or account there is no way to go back." Both
+  // halves of that report are fixed together: pushing onto a tab's own
+  // Navigator (instead of root) keeps the bottom bar on screen the same
+  // way any other pushed page in that tab already does, and AccountScreen
+  // itself now has a real back arrow (see account_screen.dart) rather
+  // than relying on one this rootNavigator push never had anyway.
+  final GlobalKey<NavigatorState>? navigatorKey;
+  const ProfileMenuButton({super.key, this.embedded = false, this.navigatorKey});
 
   Future<void> _signOut(BuildContext context) async {
     try {
@@ -36,17 +56,13 @@ class ProfileMenuButton extends StatelessWidget {
   }
 
   void _onSelected(BuildContext context, String value) {
-    // rootNavigator: true climbs past the tab's own Navigator to the one
-    // HomeScreen itself lives in, so this opens as a full page over the
-    // whole bottom-nav shell - not nested a second level deep inside
-    // whichever tab happened to be open.
-    final root = Navigator.of(context, rootNavigator: true);
+    final nav = navigatorKey?.currentState ?? Navigator.of(context);
     switch (value) {
       case 'profile':
-        root.push(MaterialPageRoute(builder: (_) => const AccountScreen()));
+        nav.push(MaterialPageRoute(builder: (_) => const AccountScreen()));
         break;
       case 'messages':
-        root.push(MaterialPageRoute(builder: (_) => const MessagesInboxScreen()));
+        nav.push(MaterialPageRoute(builder: (_) => const MessagesInboxScreen()));
         break;
       case 'logout':
         _signOut(context);

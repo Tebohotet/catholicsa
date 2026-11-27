@@ -6,6 +6,7 @@ import 'super_admin_store_screen.dart';
 import 'super_admin_development_screen.dart';
 import 'super_admin_designer_screen.dart';
 import 'super_admin_directory_screen.dart';
+import 'super_admin_parishes_screen.dart';
 import '../widgets/super_admin_menu_widgets.dart';
 import '../theme/app_theme.dart';
 
@@ -91,6 +92,13 @@ class SuperAdminHubScreen extends StatelessWidget {
                     title: 'Directory',
                     subtitle: 'Countries and Provinces - the top of the administrative hierarchy.',
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SuperAdminDirectoryScreen())),
+                  ),
+                  const SizedBox(height: 8),
+                  AdminMenuCard(
+                    icon: Icons.church,
+                    title: 'Parishes & Churches',
+                    subtitle: 'Jump straight into any parish\'s Admin Panel - turn a parish/church on for public Browse/Map, Mass times, Confession Bookings, Mass Intentions.',
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SuperAdminParishesScreen())),
                   ),
                   const SizedBox(height: 8),
                   AdminMenuCard(

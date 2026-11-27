@@ -48,7 +48,29 @@ class AccountScreen extends ConsumerWidget {
                   width: double.infinity,
                   color: AppColors.stone,
                   padding: const EdgeInsets.fromLTRB(16, 12, 16, 20),
-                  child: const Text('Account', style: TextStyle(fontFamily: appSerif, fontSize: 26, color: Colors.white)),
+                  // Was just the bare title with no way back at all - the
+                  // project owner's own bug report: "Right now when I am
+                  // at log in or account there is no way to go back."
+                  // Same conditional-back-arrow pattern already used by
+                  // browse_screen.dart's _StoneHeader. Covers both the
+                  // signed-out (login form) and signed-in view below,
+                  // since they share this one header.
+                  child: Column(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      if (Navigator.canPop(context))
+                        Padding(
+                          padding: const EdgeInsets.only(bottom: 8),
+                          child: IconButton(
+                            padding: EdgeInsets.zero,
+                            constraints: const BoxConstraints(),
+                            icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                            onPressed: () => Navigator.pop(context),
+                          ),
+                        ),
+                      const Text('Account', style: TextStyle(fontFamily: appSerif, fontSize: 26, color: Colors.white)),
+                    ],
+                  ),
                 ),
                 Expanded(
                   child: effectiveUser == null

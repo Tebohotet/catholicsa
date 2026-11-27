@@ -216,7 +216,12 @@ class _HomeScreenState extends State<HomeScreen> {
                   alignment: Alignment.topRight,
                   child: Padding(
                     padding: const EdgeInsets.all(8),
-                    child: const ProfileMenuButton(),
+                    // Pushing Account/Messages onto the CURRENT tab's own
+                    // Navigator (instead of the old rootNavigator: true)
+                    // keeps this screen's bottomNavigationBar on-screen
+                    // while either is open - see profile_menu_button.dart's
+                    // own comment for the full bug this fixes.
+                    child: ProfileMenuButton(navigatorKey: _navigatorKeys[_index]),
                   ),
                 ),
               ),
