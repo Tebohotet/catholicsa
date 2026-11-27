@@ -203,14 +203,18 @@ class _HomeScreenState extends State<HomeScreen> {
             // sitting on top of that screen's own controls - see
             // _atTabRoot and the observer in _buildTabNavigator above.
             //
-            // Also excluded on index 2 (Readings) specifically - that tab
-            // root has its own pencil/music/book icons in its own header,
-            // which this floating button used to sit on top of (a second,
-            // different overlap bug from the one _atTabRoot fixes, since
-            // Readings IS a tab root, not a pushed screen). ReadingsScreen
-            // embeds the same ProfileMenuButton inline in that header Row
-            // instead - see readings_screen.dart.
-            if (_atTabRoot && _index != 2)
+            // Also excluded on index 2 (Readings) and index 3 (Hymns)
+            // specifically - both tab roots have their own pencil/music/
+            // book icons in their own header, which this floating button
+            // used to sit on top of (a second, different overlap bug from
+            // the one _atTabRoot fixes, since both ARE tab roots, not
+            // pushed screens). Readings and Hymns each embed the same
+            // ProfileMenuButton inline in their own header Row instead -
+            // see readings_screen.dart / hymns_screen.dart. Hymns was
+            // found still missing it from a real screenshot (admin's
+            // edit-pencil + Song Book icons sitting where this floating
+            // button used to be, with no profile button visible at all).
+            if (_atTabRoot && _index != 2 && _index != 3)
               SafeArea(
                 child: Align(
                   alignment: Alignment.topRight,

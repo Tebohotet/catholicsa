@@ -354,7 +354,19 @@ service cloud.firestore {
         // pending-review courses are only visible to the parish that owns
         // them, so half-finished material never leaks to students.
         match /courses/{courseId} {
-          allow read: if resource.data.status == 'published' || isSuperAdmin() || isParishAdmin(parishId);
+          // Split into separate statements, same reasoning as the
+          // collectionGroup courses rule above and the donations/orders/
+          // products fix earlier this session: a single combined
+          // `A || B || C` statement can't be proven by Firestore's query
+          // validator for a plain list query with no matching where()
+          // clause, so it was rejecting the whole query for every
+          // signed-out/non-admin visitor even though 'published' courses
+          // were always meant to be public. getCourses() now queries with
+          // a matching `.where('status', isEqualTo: 'published')`, which
+          // this first statement can prove directly.
+          allow read: if resource.data.status == 'published';
+          allow read: if isSuperAdmin();
+          allow read: if isParishAdmin(parishId);
           allow create: if isSuperAdmin() || isParishAdmin(parishId);
           // Any parish admin can edit a course and submit it for review
           // (draft -> pendingReview). Only a priest can move it AWAY from
@@ -469,8 +481,22 @@ service cloud.firestore {
           // contains a link nobody's reviewed yet, is invisible to the
           // public - the point of either would be defeated if this only
           // happened client-side.
-          allow read: if (resource.data.hidden != true && resource.data.status != 'pendingModeration') ||
-            (isSignedIn() && (resource.data.userId == request.auth.uid || isParishAdmin(parishId) || isSuperAdmin()));
+          //
+          // Split into separate statements, same reasoning as courses
+          // just above - a single combined statement mixing a resource.data
+          // check with isSignedIn()/isParishAdmin()/isSuperAdmin() can't be
+          // proven for a plain list query with no matching where() clause,
+          // so every signed-out/non-admin visitor got permission-denied on
+          // every church's public comments list. getComments() now queries
+          // with matching `.where('hidden', isEqualTo: false)` and
+          // `.where('status', isEqualTo: 'visible')` (status is only ever
+          // 'visible' or 'pendingModeration' - see addComment - so this is
+          // the exact same condition as the old `!= true`/`!=
+          // 'pendingModeration'` check, just stated as the query can prove).
+          allow read: if resource.data.hidden == false && resource.data.status == 'visible';
+          allow read: if isSignedIn() && resource.data.userId == request.auth.uid;
+          allow read: if isSignedIn() && isParishAdmin(parishId);
+          allow read: if isSignedIn() && isSuperAdmin();
           allow create: if isSignedIn() &&
             request.resource.data.userId == request.auth.uid &&
             request.resource.data.hidden == false &&

@@ -6,6 +6,7 @@ import '../services/firestore_service.dart';
 import '../providers/view_as_role_provider.dart';
 import '../app.dart';
 import '../theme/app_theme.dart';
+import '../widgets/profile_menu_button.dart';
 
 /// "Preview" here opens the real PDF in the browser's (or device's)
 /// native PDF viewer via url_launcher - a genuinely good preview
@@ -172,6 +173,7 @@ class _HymnsScreenState extends ConsumerState<HymnsScreen> with RouteAware {
                       onPressed: snap.data == null ? null : () => _showBrowsePicker(snap.data!),
                     ),
                   ),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

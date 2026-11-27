@@ -276,16 +276,27 @@ extension ContentCoursesService on FirestoreService {
         user?['isDesigner'] == true || user?['isAuditor'] == true;
   }
 
+  // onlyPublished fetches with a real `.where('status', ...)` query filter,
+  // not just a client-side filter after fetching everything - a plain
+  // unfiltered list query can never be granted to a non-admin visitor
+  // under firestore.rules' "published OR isSuperAdmin OR isParishAdmin"
+  // rule, because Firestore's query validator has to prove the rule
+  // holds for every possible document the query could return, and it
+  // can't do that without a matching filter in the query itself. This
+  // was a real bug: a signed-out/non-admin visitor got permission-denied
+  // on every Courses section, even though every course they were ever
+  // going to see was already correctly marked 'published'.
   Future<List<Map<String, dynamic>>> getCourses(String parishId, String churchId, {bool onlyPublished = true}) async {
-    final snap = await _db
+    Query<Map<String, dynamic>> query = _db
         .collection('parishes').doc(parishId)
         .collection('churches').doc(churchId)
-        .collection('courses').get();
+        .collection('courses');
+    if (onlyPublished) query = query.where('status', isEqualTo: 'published');
+    final snap = await query.get();
     final all = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
     if (!onlyPublished) return all;
-    final published = all.where((c) => c['status'] == 'published').toList();
     final canSeeDevOnly = await _canViewDevOnlyContent();
-    return canSeeDevOnly ? published : published.where((c) => c['devOnly'] != true).toList();
+    return canSeeDevOnly ? all : all.where((c) => c['devOnly'] != true).toList();
   }
 
   Future<Map<String, dynamic>> getCourse(String parishId, String churchId, String courseId) async {

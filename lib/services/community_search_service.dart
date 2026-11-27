@@ -533,14 +533,35 @@ extension CommunitySearchService on FirestoreService {
     return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
   }
 
+  // This is the PUBLIC comments list only (CommentsSection on a church
+  // page) - admin moderation uses the separate getAllCommentsForParish,
+  // which is unaffected by this. Filters hidden/status in the query
+  // itself, not just client-side after fetching, for the same reason
+  // getCourses now does: firestore.rules' public-read branch
+  // (hidden == false && status == 'visible') can only be proven for a
+  // signed-out/non-admin visitor if the query itself carries matching
+  // where() clauses - an unfiltered list query can't be granted at all,
+  // which was a real permission-denied bug for every visitor viewing a
+  // church's comments. Sorted by createdAt client-side instead of via
+  // orderBy(), so this doesn't also need a new composite index deployed
+  // (two equality filters need no index; equality + orderBy on a
+  // different field would).
   Future<List<Map<String, dynamic>>> getComments(String parishId, String churchId) async {
     final snap = await _db
         .collection('parishes').doc(parishId)
         .collection('churches').doc(churchId)
         .collection('comments')
-        .orderBy('createdAt', descending: true)
+        .where('hidden', isEqualTo: false)
+        .where('status', isEqualTo: 'visible')
         .get();
-    return snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+    final comments = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+    comments.sort((a, b) {
+      final ta = a['createdAt'];
+      final tb = b['createdAt'];
+      if (ta is! Timestamp || tb is! Timestamp) return 0;
+      return tb.compareTo(ta);
+    });
+    return comments;
   }
 
   /// Mirrors the rule's isParishAdmin(parishId) || isSuperAdmin() exactly -
