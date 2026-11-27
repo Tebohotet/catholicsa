@@ -76,7 +76,7 @@ Future<void> showChurchFormDialog(
                       borderRadius: BorderRadius.circular(12),
                       image: pickedPhotoBytes != null
                           ? DecorationImage(image: MemoryImage(pickedPhotoBytes!), fit: BoxFit.cover)
-                          : (existingPhotoUrl != null ? DecorationImage(image: NetworkImage(existingPhotoUrl!), fit: BoxFit.cover) : null),
+                          : (existingPhotoUrl != null ? DecorationImage(image: NetworkImage(existingPhotoUrl), fit: BoxFit.cover) : null),
                     ),
                     child: (pickedPhotoBytes == null && existingPhotoUrl == null)
                         ? const Icon(Icons.add_a_photo_outlined, color: AppColors.stone)
