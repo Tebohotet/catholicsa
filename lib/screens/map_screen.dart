@@ -11,6 +11,7 @@ import 'bible_screen.dart';
 import '../theme/app_theme.dart';
 import '../models/liturgical_day.dart';
 import '../providers/page_diagnostics_provider.dart';
+import '../app.dart';
 
 const _brass = Color(0xFFA9822F);
 const _stone = Color(0xFF324054);
@@ -62,7 +63,7 @@ class MapScreen extends StatefulWidget {
   State<MapScreen> createState() => _MapScreenState();
 }
 
-class _MapScreenState extends State<MapScreen> {
+class _MapScreenState extends State<MapScreen> with RouteAware {
   final _mapController = MapController();
   List<Church>? _churches;
   Map<String, List<ServiceEntry>> _upcoming = {};
@@ -82,6 +83,23 @@ class _MapScreenState extends State<MapScreen> {
       TestCase('getLiturgicalDay (for daily verse card)', () => FirestoreService().getLiturgicalDay(DateTime.now())),
     ]);
   }
+
+  // Same reasoning, same pattern as hymns_screen.dart/readings_screen.dart:
+  // without this, Mass times added/edited in the Admin Panel (a separate
+  // pushed screen) never show up back here until the whole app reloads,
+  // since _load() above only ever ran once, in initState - the project
+  // owner's own bug report: "I added the mass and still see 'No upcoming
+  // service'." Re-running _load() the instant you're navigated back to
+  // this tab fixes that automatically, no manual refresh needed.
+  @override
+  void didChangeDependencies() {
+    super.didChangeDependencies();
+    final route = ModalRoute.of(context);
+    if (route != null) rootRouteObserver.subscribe(this, route);
+  }
+
+  @override
+  void didPopNext() => _load();
 
   Future<void> _load() async {
     try {
@@ -229,6 +247,7 @@ class _MapScreenState extends State<MapScreen> {
 
   @override
   void dispose() {
+    rootRouteObserver.unsubscribe(this);
     _feasibilityHideTimer?.cancel();
     _mapMessageHideTimer?.cancel();
     super.dispose();
@@ -342,8 +361,27 @@ class _MapScreenState extends State<MapScreen> {
     final points = _churches!.map((c) => LatLng(c.geopoint.latitude, c.geopoint.longitude)).toList();
     if (_userPosition != null) points.add(LatLng(_userPosition!.latitude, _userPosition!.longitude));
     setState(() { _selectedChurchId = null; _routePoints = null; });
+    // Confirmed real crash: "Unsupported operation: Infinity or NaN
+    // toInt." CameraFit.bounds works out a zoom level by dividing by the
+    // bounds' own width/height - a bounds built from a single point (or
+    // several points that all land on the exact same spot) has zero
+    // span, so that division produces Infinity/NaN and flutter_map
+    // crashes trying to round it to a zoom level. Hit this exactly:
+    // tapping "Show all" with only one church on the map and no user
+    // location yet. A single point has nothing to "fit" anyway - just
+    // centre on it at a sensible zoom instead of asking flutter_map to
+    // fit a zero-area box.
+    if (points.length == 1) {
+      _mapController.move(points.first, 14);
+      return;
+    }
+    final bounds = LatLngBounds.fromPoints(points);
+    if (bounds.north == bounds.south && bounds.east == bounds.west) {
+      _mapController.move(points.first, 14);
+      return;
+    }
     _mapController.fitCamera(CameraFit.bounds(
-      bounds: LatLngBounds.fromPoints(points),
+      bounds: bounds,
       padding: const EdgeInsets.all(48),
     ));
   }
