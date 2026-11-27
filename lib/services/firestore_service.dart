@@ -663,6 +663,33 @@ class FirestoreService {
     });
   }
 
+  /// A service's document id is derived from its own date+time (see
+  /// addService above: `${dateStr}_$time`) - so changing either of those
+  /// is a genuinely different id, not an in-place field update. Writes
+  /// the new/changed entry FIRST, then only removes the old one if the
+  /// id actually changed - never the other way round, so a failure
+  /// partway through never loses the entry entirely (worst case is a
+  /// harmless duplicate the admin can just delete, not a vanished Mass
+  /// time). The project owner's own ask: "Be able to edit the service,
+  /// the time and date even the language" - previously only Add/Delete
+  /// existed, so changing anything meant deleting and re-adding by hand.
+  Future<void> updateService({
+    required String parishId,
+    required String churchId,
+    required String oldServiceId,
+    required DateTime date,
+    required String time,
+    required String type,
+    required String language,
+  }) async {
+    await addService(parishId: parishId, churchId: churchId, date: date, time: time, type: type, language: language);
+    final dateStr = '${date.year.toString().padLeft(4, '0')}-${date.month.toString().padLeft(2, '0')}-${date.day.toString().padLeft(2, '0')}';
+    final newId = '${dateStr}_$time';
+    if (newId != oldServiceId) {
+      await deleteService(parishId, churchId, oldServiceId);
+    }
+  }
+
   Future<void> deleteService(String parishId, String churchId, String serviceId) async {
     await _db
         .collection('parishes').doc(parishId)

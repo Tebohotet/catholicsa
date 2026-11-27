@@ -7,6 +7,7 @@ import '../services/firestore_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
+import '../widgets/profile_menu_button.dart';
 
 /// Where a seller who's delivering an item themselves (rather than a real
 /// courier company) posts proof at each step - packed, on the way,
@@ -72,6 +73,8 @@ class _MySalesScreenState extends State<MySalesScreen> {
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   const Text('My Sales', style: TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                  const Spacer(),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

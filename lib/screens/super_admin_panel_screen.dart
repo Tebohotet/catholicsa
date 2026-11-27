@@ -8,6 +8,7 @@ import 'package:intl/intl.dart';
 import '../services/firestore_service.dart';
 import '../services/audit_log_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/profile_menu_button.dart';
 import '../widgets/async_section.dart';
 import '../widgets/admin_crud_section.dart';
 import '../services/auth_service.dart';
@@ -218,6 +219,8 @@ class _SuperAdminPanelScreenState extends State<SuperAdminPanelScreen> {
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   const Text('Super Admin — Roles', style: TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                  const Spacer(),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import 'package:intl/intl.dart';
 import '../../services/firestore_service.dart';
 import '../../theme/app_theme.dart';
+import '../../widgets/profile_menu_button.dart';
 import 'chat_screen.dart';
 
 /// The inbox - every conversation this signed-in user is part of, most
@@ -28,6 +29,8 @@ class MessagesInboxScreen extends StatelessWidget {
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   const Text('Messages', style: TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                  const Spacer(),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

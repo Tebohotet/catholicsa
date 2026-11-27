@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/profile_menu_button.dart';
 import 'admin_panel_screen.dart';
 
 /// The project owner's own ask: "I want to see the parish, church, so
@@ -36,6 +37,8 @@ class SuperAdminParishesScreen extends StatelessWidget {
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   const Text('Parishes & Churches', style: TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                  const Spacer(),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

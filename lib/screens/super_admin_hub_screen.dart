@@ -9,6 +9,7 @@ import 'super_admin_directory_screen.dart';
 import 'super_admin_parishes_screen.dart';
 import '../widgets/super_admin_menu_widgets.dart';
 import '../theme/app_theme.dart';
+import '../widgets/profile_menu_button.dart';
 
 /// The real landing menu for Super Admin - focused categories instead
 /// of one long scroll through seventeen sections. Role grants/revokes
@@ -38,6 +39,8 @@ class SuperAdminHubScreen extends StatelessWidget {
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   const Text('Super Admin', style: TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                  const Spacer(),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

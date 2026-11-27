@@ -3,6 +3,7 @@ import '../services/firestore_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
+import '../widgets/profile_menu_button.dart';
 
 /// Same reasoning as My Orders - a donor previously got one push
 /// notification on status change and then had nowhere in the app to
@@ -66,6 +67,8 @@ class _MyDonationsScreenState extends State<MyDonationsScreen> {
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   const Text('My Donations', style: TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                  const Spacer(),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

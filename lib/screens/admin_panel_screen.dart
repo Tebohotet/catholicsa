@@ -11,6 +11,7 @@ import '../models/parish.dart';
 import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
 import '../widgets/church_form_dialogs.dart';
+import '../widgets/profile_menu_button.dart';
 import 'payment_gateway_settings_screen.dart';
 import 'lesson_editor_screen.dart';
 
@@ -104,6 +105,7 @@ class _AdminPanelScreenState extends State<AdminPanelScreen> {
                       ],
                     ),
                   ),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),
@@ -601,18 +603,24 @@ class _ServiceEditor extends StatelessWidget {
   final VoidCallback onChanged;
   const _ServiceEditor({super.key, required this.parishId, required this.churchId, required this.onChanged});
 
-  Future<void> _addService(BuildContext context) async {
-    DateTime? date = DateTime.now();
-    final timeCtrl = TextEditingController(text: '09:00');
-    String type = 'Mass';
-    String language = 'EN';
+  /// existing == null: Add Service (unchanged behaviour). existing !=
+  /// null: Edit Service - same dialog, pre-filled from that entry, and
+  /// Save calls FirestoreService.updateService instead of addService.
+  /// Previously there was no edit at all, only Add/Delete - the project
+  /// owner's own ask: "Be able to edit the service, the time and date
+  /// even the language."
+  Future<void> _showServiceDialog(BuildContext context, {ServiceEntry? existing}) async {
+    DateTime? date = existing?.date ?? DateTime.now();
+    final timeCtrl = TextEditingController(text: existing?.time ?? '09:00');
+    String type = existing?.type ?? 'Mass';
+    String language = existing?.language ?? 'EN';
 
     await showDialog(
       context: context,
       builder: (dialogContext) => StatefulBuilder(
         builder: (context, setDialogState) => AlertDialog(
           backgroundColor: AppColors.paper,
-          title: const Text('Add Service', style: TextStyle(fontFamily: appSerif, fontSize: 18)),
+          title: Text(existing == null ? 'Add Service' : 'Edit Service', style: const TextStyle(fontFamily: appSerif, fontSize: 18)),
           content: Column(
             mainAxisSize: MainAxisSize.min,
             crossAxisAlignment: CrossAxisAlignment.start,
@@ -656,14 +664,21 @@ class _ServiceEditor extends StatelessWidget {
               style: FilledButton.styleFrom(backgroundColor: AppColors.brass),
               onPressed: () async {
                 if (date == null || timeCtrl.text.trim().isEmpty) return;
-                await FirestoreService().addService(
-                  parishId: parishId, churchId: churchId,
-                  date: date!, time: timeCtrl.text.trim(), type: type, language: language,
-                );
+                if (existing == null) {
+                  await FirestoreService().addService(
+                    parishId: parishId, churchId: churchId,
+                    date: date!, time: timeCtrl.text.trim(), type: type, language: language,
+                  );
+                } else {
+                  await FirestoreService().updateService(
+                    parishId: parishId, churchId: churchId, oldServiceId: existing.id,
+                    date: date!, time: timeCtrl.text.trim(), type: type, language: language,
+                  );
+                }
                 if (dialogContext.mounted) Navigator.pop(dialogContext);
                 onChanged();
               },
-              child: const Text('Add'),
+              child: Text(existing == null ? 'Add' : 'Save'),
             ),
           ],
         ),
@@ -686,12 +701,21 @@ class _ServiceEditor extends StatelessWidget {
               leading: Text(s.time, style: const TextStyle(fontFamily: appSerif, fontSize: 15)),
               title: Text(DateFormat('EEEE, d MMM').format(s.date)),
               subtitle: Text('${s.type == 'CommunionService' ? 'Communion Service' : 'Mass'} · ${s.language}'),
-              trailing: IconButton(
-                icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
-                onPressed: () async {
-                  await FirestoreService().deleteService(parishId, churchId, s.id);
-                  onChanged();
-                },
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.edit_outlined, color: AppColors.stone, size: 20),
+                    onPressed: () => _showServiceDialog(context, existing: s),
+                  ),
+                  IconButton(
+                    icon: const Icon(Icons.delete_outline, color: Colors.redAccent, size: 20),
+                    onPressed: () async {
+                      await FirestoreService().deleteService(parishId, churchId, s.id);
+                      onChanged();
+                    },
+                  ),
+                ],
               ),
             )).toList(),
           ),
@@ -699,7 +723,7 @@ class _ServiceEditor extends StatelessWidget {
         const SizedBox(height: 8),
         OutlinedButton.icon(
           style: OutlinedButton.styleFrom(foregroundColor: AppColors.stone, side: const BorderSide(color: AppColors.stone)),
-          onPressed: () => _addService(context),
+          onPressed: () => _showServiceDialog(context),
           icon: const Icon(Icons.add, size: 16),
           label: const Text('Add Service'),
         ),

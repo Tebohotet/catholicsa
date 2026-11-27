@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/admin_crud_section.dart';
+import '../widgets/profile_menu_button.dart';
 
 /// PayFast is now a real, working checkout: pick it below, fill in the
 /// Merchant ID/Key (and, before going live, a passphrase), and buyers pay
@@ -163,6 +164,8 @@ class _PaymentGatewaySettingsScreenState extends State<PaymentGatewaySettingsScr
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   const Text('Payment Settings', style: TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                  const Spacer(),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

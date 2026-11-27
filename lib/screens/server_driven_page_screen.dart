@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/block_registry.dart';
+import '../widgets/profile_menu_button.dart';
 
 /// The generic renderer - one screen class handles every custom page ever
 /// created, since the actual content comes entirely from the block list
@@ -39,6 +40,8 @@ class ServerDrivenPageScreen extends StatelessWidget {
                     children: [
                       IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                       Text(page['title'] ?? '', style: const TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                      const Spacer(),
+                      const ProfileMenuButton(embedded: true),
                     ],
                   ),
                 ),

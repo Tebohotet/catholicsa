@@ -3,6 +3,7 @@ import '../services/firestore_service.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
+import '../widgets/profile_menu_button.dart';
 
 /// Same gap this closes as My Donations did earlier - a seller could
 /// list an item and never see it again to edit or remove it, even
@@ -168,6 +169,8 @@ class _MyListingsScreenState extends State<MyListingsScreen> {
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   const Text('My Listings', style: TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                  const Spacer(),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

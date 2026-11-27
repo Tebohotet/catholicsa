@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
+import '../widgets/profile_menu_button.dart';
 import 'bible_screen.dart';
 
 class MyBibleBookmarksScreen extends StatefulWidget {
@@ -37,6 +38,8 @@ class _MyBibleBookmarksScreenState extends State<MyBibleBookmarksScreen> {
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   const Text('My Bible Bookmarks', style: TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                  const Spacer(),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

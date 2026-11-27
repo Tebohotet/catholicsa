@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'super_admin_panel_screen.dart';
 import '../widgets/super_admin_menu_widgets.dart';
 import '../theme/app_theme.dart';
+import '../widgets/profile_menu_button.dart';
 
 /// Countries and Provinces - the top of the whole administrative
 /// hierarchy (every diocese, parish, and church sits under one of
@@ -30,6 +31,8 @@ class SuperAdminDirectoryScreen extends StatelessWidget {
                 children: [
                   IconButton(icon: const Icon(Icons.arrow_back, color: Colors.white), onPressed: () => Navigator.pop(context)),
                   const Text('Directory', style: TextStyle(fontFamily: appSerif, fontSize: 22, color: Colors.white)),
+                  const Spacer(),
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),
