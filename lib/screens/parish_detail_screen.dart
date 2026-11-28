@@ -188,12 +188,32 @@ class _ParishDetailScreenState extends State<ParishDetailScreen> {
                                     tooltip: 'Add a church or Mass venue',
                                     icon: const Icon(Icons.add_circle_outline, size: 20, color: AppColors.brass),
                                     padding: EdgeInsets.zero,
+                                    // Project owner: tapped this "+" on a
+                                    // parish page and the dialog never
+                                    // opened. Calling showDialog() directly
+                                    // inside PopupMenuButton's onSelected is
+                                    // a known Flutter trap - the popup
+                                    // menu's own route is still in the
+                                    // middle of popping itself when
+                                    // onSelected fires, and on this app's
+                                    // nested go_router Navigators (this
+                                    // page sits on the Browse tab's own
+                                    // branch Navigator, not the root one)
+                                    // that race can make showDialog resolve
+                                    // the wrong Navigator and silently do
+                                    // nothing instead of throwing a visible
+                                    // error. Deferring to the next frame
+                                    // (after the menu has actually finished
+                                    // closing) is the standard fix.
                                     onSelected: (v) {
-                                      if (v == 'church') {
-                                        showChurchFormDialog(context, parishId: widget.parishId, onSaved: (_) => setState(() {}));
-                                      } else {
-                                        showVenueFormDialog(context, parishId: widget.parishId, onSaved: (_) => setState(() {}));
-                                      }
+                                      WidgetsBinding.instance.addPostFrameCallback((_) {
+                                        if (!context.mounted) return;
+                                        if (v == 'church') {
+                                          showChurchFormDialog(context, parishId: widget.parishId, onSaved: (_) => setState(() {}));
+                                        } else {
+                                          showVenueFormDialog(context, parishId: widget.parishId, onSaved: (_) => setState(() {}));
+                                        }
+                                      });
                                     },
                                     itemBuilder: (_) => const [
                                       PopupMenuItem(value: 'church', child: Text('Add Church')),

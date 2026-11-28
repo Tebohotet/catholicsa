@@ -112,12 +112,35 @@ class FirestoreService {
   /// getAllParishesFlat, used for role assignment) deliberately don't
   /// use this - an admin needs to see an empty parish specifically in
   /// order to add its first church.
+  ///
+  /// Two real bugs fixed here, found live, 2026-11-28 (project owner: "I
+  /// did hide the demo parish ... It should take me to the parish, but
+  /// there it has no info, so it should hide till we have information
+  /// about it"):
+  /// 1. This never checked the parish's own `isActive` flag at all - the
+  ///    exact "Visible in public Browse" toggle on the Admin Panel/Parish
+  ///    page (see `setParishActive`) had zero effect here, so turning a
+  ///    parish off there didn't actually remove it from this list.
+  /// 2. The old church check only asked "does this parish's churches
+  ///    subcollection have anything in it at all" - so a parish whose
+  ///    only church was itself hidden (`isActive: false` - same
+  ///    hidden-from-public flag `ChurchListScreen`/`ParishDetailScreen`
+  ///    already filter on when actually showing a parish's churches, see
+  ///    those screens' own `.where((c) => c.isActive)`) still counted as
+  ///    "has a church" and stayed visible here, even though opening it
+  ///    showed nothing. A parish with only hidden churches is the same
+  ///    work-in-progress case this function already exists to hide, not
+  ///    a different one.
   Future<List<Map<String, dynamic>>> getParishes(String dioceseId) async {
     final snap = await _db.collection('parishes').where('dioceseId', isEqualTo: dioceseId).get();
-    final parishes = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
+    final parishes = snap.docs
+        .map((d) => {'id': d.id, ...d.data()})
+        .where((p) => (p['isActive'] as bool?) ?? true)
+        .toList();
     final withChurchCheck = await Future.wait(parishes.map((p) async {
-      final churchesSnap = await _db.collection('parishes').doc(p['id']).collection('churches').limit(1).get();
-      return {'parish': p, 'hasChurch': churchesSnap.docs.isNotEmpty};
+      final churchesSnap = await _db.collection('parishes').doc(p['id']).collection('churches').get();
+      final hasActiveChurch = churchesSnap.docs.any((c) => (c.data()['isActive'] as bool?) ?? true);
+      return {'parish': p, 'hasChurch': hasActiveChurch};
     }));
     return withChurchCheck.where((e) => e['hasChurch'] == true).map((e) => e['parish'] as Map<String, dynamic>).toList();
   }

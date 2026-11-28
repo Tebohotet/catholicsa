@@ -33,6 +33,27 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   bool _ready = false;
   Uint8List? _bytes;
 
+  // Project owner's own ask, 2026-11-28, right after confirming the PDF
+  // itself finally renders: "Just not resizable." Pinch-to-zoom already
+  // works on a touch screen, but this app's primary live deployment is
+  // Flutter Web and there was no on-screen affordance at all for a mouse/
+  // trackpad user - no visible way to zoom without already knowing
+  // Syncfusion's Ctrl+scroll shortcut. These two buttons drive the same
+  // PdfViewerController.zoomLevel a pinch gesture would, just explicitly,
+  // and _zoom tracks it so the buttons can disable themselves at the
+  // viewer's own min/max (1.0/_maxZoom below) instead of doing nothing
+  // silently past that point.
+  static const _minZoom = 1.0;
+  static const _maxZoom = 4.0;
+  static const _zoomStep = 0.25;
+  double _zoom = _minZoom;
+
+  void _setZoom(double z) {
+    final clamped = z.clamp(_minZoom, _maxZoom);
+    _controller.zoomLevel = clamped;
+    setState(() => _zoom = clamped);
+  }
+
   // Some content (the bulk-imported hymn source PDFs in particular)
   // stores a direct public GCS object URL
   // (https://storage.googleapis.com/<bucket>/<path>) instead of a
@@ -124,6 +145,18 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                       overflow: TextOverflow.ellipsis,
                     ),
                   ),
+                  if (_ready) ...[
+                    IconButton(
+                      tooltip: 'Zoom out',
+                      icon: const Icon(Icons.remove_circle_outline, color: Colors.white, size: 20),
+                      onPressed: _zoom <= _minZoom ? null : () => _setZoom(_zoom - _zoomStep),
+                    ),
+                    IconButton(
+                      tooltip: 'Zoom in',
+                      icon: const Icon(Icons.add_circle_outline, color: Colors.white, size: 20),
+                      onPressed: _zoom >= _maxZoom ? null : () => _setZoom(_zoom + _zoomStep),
+                    ),
+                  ],
                   IconButton(
                     tooltip: 'Open externally',
                     icon: const Icon(Icons.open_in_new, color: Colors.white, size: 20),
@@ -147,11 +180,15 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                             SfPdfViewer.memory(
                               _bytes!,
                               controller: _controller,
+                              maxZoomLevel: _maxZoom,
                               onDocumentLoaded: (_) {
                                 if (mounted) setState(() => _ready = true);
                               },
                               onDocumentLoadFailed: (details) {
                                 if (mounted) setState(() => _error = details.description);
+                              },
+                              onZoomLevelChanged: (details) {
+                                if (mounted) setState(() => _zoom = details.newZoomLevel);
                               },
                             ),
                             if (!_ready) const Center(child: CircularProgressIndicator()),

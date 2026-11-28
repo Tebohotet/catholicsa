@@ -17,19 +17,38 @@ class ProvinceDetailScreen extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    return Scaffold(
-      backgroundColor: AppColors.paper,
-      body: FutureBuilder<Map<String, dynamic>>(
-        future: FirestoreService().getProvinceById(provinceId),
-        builder: (context, snap) {
-          if (snap.hasError) {
-            return Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Error: ${snap.error}')));
-          }
-          if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-          final province = snap.data!;
+    return FutureBuilder<List<dynamic>>(
+      // Fetched together, not just the province itself - project owner's
+      // own ask, 2026-11-28: "On browse it skip when there is only one
+      // item, no options to pick from." Need the diocese count before
+      // deciding whether to show this page at all or skip straight past
+      // it into the one diocese underneath (same idea BrowseScreen's own
+      // province list and DioceseDetailScreen's parish list now apply,
+      // see those files) - that trade-off does mean this province's own
+      // notices/prayers/courses/gallery/marketplace rollups don't show
+      // in that case, same as the rest of this skip chain. Not wrapped in
+      // a Scaffold at this level (unlike before) so the skip branch below
+      // can return DioceseDetailScreen - which has its own Scaffold -
+      // directly, instead of nesting one Scaffold inside another.
+      future: Future.wait([
+        FirestoreService().getProvinceById(provinceId),
+        FirestoreService().getDioceses(provinceId),
+      ]),
+      builder: (context, snap) {
+        if (snap.hasError) {
+          return Scaffold(backgroundColor: AppColors.paper, body: Center(child: Padding(padding: const EdgeInsets.all(24), child: Text('Error: ${snap.error}'))));
+        }
+        if (!snap.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        final province = snap.data![0] as Map<String, dynamic>;
+        final dioceses = snap.data![1] as List<Map<String, dynamic>>;
+        if (dioceses.length == 1) {
+          return DioceseDetailScreen(dioceseId: dioceses.first['id']);
+        }
 
-          return SingleChildScrollView(
-            child: Column(
+        return Scaffold(
+          backgroundColor: AppColors.paper,
+          body: SingleChildScrollView(
+          child: Column(
               crossAxisAlignment: CrossAxisAlignment.start,
               children: [
                 SafeArea(
@@ -128,9 +147,9 @@ class ProvinceDetailScreen extends StatelessWidget {
                 ),
               ],
             ),
-          );
-        },
-      ),
+          ),
+        );
+      },
     );
   }
 }

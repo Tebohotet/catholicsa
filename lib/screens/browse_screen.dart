@@ -157,6 +157,42 @@ class _BrowseHierarchy extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    // Project owner's own ask, 2026-11-28: "On browse it skip when there
+    // is only one item, no options to pick from." Checked here, one level
+    // up from where this screen's own province list renders below, so a
+    // single visible province skips straight into ProvinceDetailScreen -
+    // same idea DioceseDetailScreen (one diocese) and ParishDetailScreen's
+    // listing (one parish) now apply one level down each, see those files.
+    // This does mean the "South Africa" page's own national notices/
+    // prayers/courses/gallery/marketplace rollups don't show in that case -
+    // same trade-off the single-active-parish shortcut in BrowseScreen
+    // above already makes, just applied one level at a time here instead
+    // of only all-the-way-through. A second province re-fetch below (the
+    // existing one, inside the page itself) is simpler and safer than
+    // threading this result all the way down for what's a small, rarely-
+    // changing list.
+    return FutureBuilder<List<Map<String, dynamic>>>(
+      future: FirestoreService().getProvinces(),
+      builder: (context, gateSnap) {
+        if (!gateSnap.hasData) return const Scaffold(body: Center(child: CircularProgressIndicator()));
+        final gateProvinces = isAdmin
+            ? gateSnap.data!
+            : gateSnap.data!.where((p) => (p['isActive'] as bool?) ?? true).toList();
+        if (gateProvinces.length == 1) {
+          return ProvinceDetailScreen(provinceId: gateProvinces.first['id']);
+        }
+        return _BrowseHierarchyBody(isAdmin: isAdmin);
+      },
+    );
+  }
+}
+
+class _BrowseHierarchyBody extends StatelessWidget {
+  final bool isAdmin;
+  const _BrowseHierarchyBody({required this.isAdmin});
+
+  @override
+  Widget build(BuildContext context) {
     return Scaffold(
       backgroundColor: AppColors.paper,
       body: SingleChildScrollView(
