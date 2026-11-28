@@ -1,6 +1,5 @@
 import 'package:flutter/material.dart';
 import 'package:cloud_firestore/cloud_firestore.dart' show Timestamp, GeoPoint;
-import 'package:url_launcher/url_launcher.dart';
 import 'package:image_picker/image_picker.dart';
 import 'package:geolocator/geolocator.dart';
 import 'package:intl/intl.dart';
@@ -14,6 +13,7 @@ import '../widgets/church_form_dialogs.dart';
 import '../widgets/profile_menu_button.dart';
 import 'payment_gateway_settings_screen.dart';
 import 'lesson_editor_screen.dart';
+import 'pdf_viewer_screen.dart';
 
 class AdminPanelScreen extends StatefulWidget {
   final String parishId;
@@ -3011,7 +3011,9 @@ class _MarketplaceOrdersAdminSectionState extends State<_MarketplaceOrdersAdminS
                   if (o['proofOfPaymentType'] == 'pdf')
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(foregroundColor: AppColors.stone, side: const BorderSide(color: AppColors.stone)),
-                      onPressed: () => launchUrl(Uri.parse(proofUrl), mode: LaunchMode.externalApplication),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => PdfViewerScreen(url: proofUrl, title: 'Proof of Payment - ${o['productTitle'] ?? ''}'),
+                      )),
                       icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
                       label: const Text('View Proof (PDF)', style: TextStyle(fontSize: 12)),
                     )
@@ -3239,7 +3241,9 @@ class _DonationsAdminSectionState extends State<_DonationsAdminSection> {
                   if (d['proofOfPaymentType'] == 'pdf')
                     OutlinedButton.icon(
                       style: OutlinedButton.styleFrom(foregroundColor: AppColors.stone, side: const BorderSide(color: AppColors.stone)),
-                      onPressed: () => launchUrl(Uri.parse(proofUrl), mode: LaunchMode.externalApplication),
+                      onPressed: () => Navigator.push(context, MaterialPageRoute(
+                        builder: (_) => PdfViewerScreen(url: proofUrl, title: 'Proof of Payment - ${d['associationName'] ?? ''}'),
+                      )),
                       icon: const Icon(Icons.picture_as_pdf_outlined, size: 16),
                       label: const Text('View Proof (PDF)', style: TextStyle(fontSize: 12)),
                     )

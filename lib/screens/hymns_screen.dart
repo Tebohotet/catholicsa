@@ -1,18 +1,19 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:url_launcher/url_launcher.dart';
 import 'package:audioplayers/audioplayers.dart';
 import '../services/firestore_service.dart';
 import '../providers/view_as_role_provider.dart';
 import '../app.dart';
 import '../theme/app_theme.dart';
 import '../widgets/profile_menu_button.dart';
+import 'pdf_viewer_screen.dart';
 
-/// "Preview" here opens the real PDF in the browser's (or device's)
-/// native PDF viewer via url_launcher - a genuinely good preview
-/// experience with zero new rendering dependency, rather than an
-/// embedded in-app PDF widget that would need separate, unverified
-/// support across both web and Android.
+/// "Preview" here opens the PDF in the built-in PdfViewerScreen, so a
+/// visitor stays inside the app instead of being handed off to the
+/// browser's/device's own PDF viewer via url_launcher - see
+/// pdf_viewer_screen.dart for why Syncfusion was the package chosen
+/// (Web support, where this app actually lives, which flutter_pdfview
+/// doesn't offer).
 ///
 /// The browse button at the top mirrors the Bible screen's own book
 /// picker (a searchable modal sheet) - the same "pick from the whole
@@ -56,12 +57,9 @@ class _HymnsScreenState extends ConsumerState<HymnsScreen> with RouteAware {
 
   void _refresh() => setState(() { _hymnsFuture = FirestoreService().getHymns(); });
 
-  Future<void> _preview(String pdfUrl, String title) async {
-    final uri = Uri.parse(pdfUrl);
-    final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-    if (!ok && mounted) {
-      ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open "$title".')));
-    }
+  void _preview(String pdfUrl, String title) {
+    if (pdfUrl.isEmpty) return;
+    Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(url: pdfUrl, title: title)));
   }
 
   void _showLyrics(String title, String lyrics) {
@@ -458,12 +456,8 @@ class _HymnAudioPlayerDialogState extends State<_HymnAudioPlayerDialog> {
           TextButton.icon(
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
             label: const Text('View PDF'),
-            onPressed: () async {
-              final uri = Uri.parse(widget.pdfUrl!);
-              final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
-              if (!ok && mounted) {
-                ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open "${widget.title}".')));
-              }
+            onPressed: () {
+              Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(url: widget.pdfUrl!, title: widget.title)));
             },
           ),
         TextButton(

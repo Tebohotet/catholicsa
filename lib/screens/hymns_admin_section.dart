@@ -4,10 +4,10 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, Tar
 import 'package:file_picker/file_picker.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:audioplayers/audioplayers.dart';
-import 'package:url_launcher/url_launcher.dart';
 import '../services/firestore_service.dart';
 import '../services/hymn_conversion_service.dart';
 import '../theme/app_theme.dart';
+import 'pdf_viewer_screen.dart';
 
 /// Imports the verified CMAA hymn list (title + real PDF link, bundled
 /// as assets/hymns/cmaa_hymns.json) into Firestore. Deliberately not a
@@ -535,7 +535,9 @@ class _HymnsAdminSectionState extends State<HymnsAdminSection> {
                                 IconButton(
                                   tooltip: 'View original PDF - open it alongside Play to check the audio against the actual sheet music',
                                   icon: const Icon(Icons.picture_as_pdf_outlined, color: AppColors.stone),
-                                  onPressed: () => launchUrl(Uri.parse(pdfUrl), mode: LaunchMode.externalApplication),
+                                  onPressed: () => Navigator.push(context, MaterialPageRoute(
+                                    builder: (_) => PdfViewerScreen(url: pdfUrl, title: h['title'] ?? ''),
+                                  )),
                                 ),
                                 const SizedBox(width: 4),
                               ],

@@ -71,6 +71,18 @@ dependencies:
   # webview redirect + Cloud Function to generate the signed payment request)
   webview_flutter: ^4.10.0
 
+  # Built-in PDF reader - renders hymn source PDFs, "View original PDF"
+  # (admin) and "View Proof (PDF)" (donation/marketplace) in-app instead of
+  # handing off to the browser's/device's own PDF viewer via url_launcher.
+  # Chosen over flutter_pdfview specifically because this app's primary
+  # live deployment is Flutter Web (catholicsa.co.za) and flutter_pdfview
+  # is Android/iOS-only (native platform views, no Web support).
+  # Syncfusion's viewer supports Web + Android + iOS + Windows/macOS/Linux
+  # under its free Community License (free for small teams/revenue - see
+  # syncfusion.com/products/communitylicense for the exact eligibility
+  # terms before this app grows past that).
+  syncfusion_flutter_pdfviewer: ^35.2.13
+
 dev_dependencies:
   flutter_test:
     sdk: flutter
