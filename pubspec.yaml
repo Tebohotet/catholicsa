@@ -81,7 +81,13 @@ dependencies:
   # under its free Community License (free for small teams/revenue - see
   # syncfusion.com/products/communitylicense for the exact eligibility
   # terms before this app grows past that).
-  syncfusion_flutter_pdfviewer: ^35.2.13
+  #
+  # Pinned to 33.2.13, not latest (35.x) - 35.x's syncfusion_flutter_pdf
+  # needs xml ^7.0.1, which conflicts with this project's own xml ^6.5.0
+  # (used by the hymn-conversion MusicXML pipeline - see
+  # hymn_conversion_service_io.dart). `flutter pub get` itself suggested
+  # this exact downgrade and confirmed it resolves.
+  syncfusion_flutter_pdfviewer: ^33.2.13
 
 dev_dependencies:
   flutter_test:
