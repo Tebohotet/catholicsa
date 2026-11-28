@@ -457,13 +457,19 @@ by definition, regardless of what its own status says.
   it; needs the project owner's own Google Cloud login to run it (see
   PROJECT_STATUS.md for the exact command) - nothing left here for the
   bot to do until that's run.
-- **No URL-synced routing** (`app.dart`'s own doc comment: "this app
-  has no named routes at all") - a browser refresh always reloads the
-  landing/About Us page instead of wherever you actually were,
-  including mid-way through a tab like Hymns or a screen pushed on top
-  of one. Real, deliberately deferred: fixing it properly means
-  adopting `go_router` and converting navigation across dozens of
-  screens - a genuine architecture change, not a quick patch. Flagged
-  again 2026-11-28 after the project owner hit it directly ("I need
-  refresh to keep in hymns... no start over from about us"). Needs the
-  project owner's go-ahead before starting.
+- 🟡 **No URL-synced routing - Phase 1 fixed, same night, not yet tried
+  live.** Was: a browser refresh always reloaded the landing/About Us
+  page instead of wherever you actually were. Flagged by the project
+  owner directly ("I need refresh to keep in hymns... no start over
+  from about us"), who then said "Yes, start it now" when asked about
+  the go_router migration this needs. Now: refreshing on any of the 4
+  bottom-nav tabs, or on the Hymns tab's PDF viewer, reloads exactly
+  that - not About Us. Church share-links/QR codes keep working
+  unchanged. **Not done yet**: anything pushed *on top of* a tab
+  (Browse -> a parish/church, Admin Panel, Account, Messages, and
+  dozens more) still resets to that tab's own root on refresh, not the
+  exact screen - a smaller, remaining version of the same limitation,
+  left for a future pass. **Needs `flutter pub get && flutter analyze`
+  run for real before trusting this** - this touches `app.dart` and
+  `home_screen.dart`, the two most central files in the app, and this
+  sandbox has no way to compile-check it itself.

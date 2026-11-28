@@ -1,12 +1,12 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import '../services/firestore_service.dart';
 import '../providers/view_as_role_provider.dart';
 import '../app.dart';
 import '../theme/app_theme.dart';
 import '../widgets/profile_menu_button.dart';
 import '../services/hymn_player_service.dart';
-import 'pdf_viewer_screen.dart';
 
 /// "Preview" here opens the PDF in the built-in PdfViewerScreen, so a
 /// visitor stays inside the app instead of being handed off to the
@@ -59,7 +59,11 @@ class _HymnsScreenState extends ConsumerState<HymnsScreen> with RouteAware {
 
   void _preview(String pdfUrl, String title) {
     if (pdfUrl.isEmpty) return;
-    Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(url: pdfUrl, title: title)));
+    // A real route (/hymns/pdf?...), not a plain Navigator.push - added
+    // 2026-11-28 so refreshing while viewing a hymn's PDF keeps you
+    // right here instead of resetting to About Us. See app.dart's router
+    // config for where this path is actually built.
+    context.push(Uri(path: '/hymns/pdf', queryParameters: {'url': pdfUrl, 'title': title}).toString());
   }
 
   void _showLyrics(String title, String lyrics) {
@@ -443,7 +447,7 @@ class _HymnAudioPlayerDialogState extends State<_HymnAudioPlayerDialog> {
             icon: const Icon(Icons.picture_as_pdf_outlined, size: 18),
             label: const Text('View PDF'),
             onPressed: () {
-              Navigator.push(context, MaterialPageRoute(builder: (_) => PdfViewerScreen(url: widget.pdfUrl!, title: widget.title)));
+              context.push(Uri(path: '/hymns/pdf', queryParameters: {'url': widget.pdfUrl!, 'title': widget.title}).toString());
             },
           ),
         TextButton(

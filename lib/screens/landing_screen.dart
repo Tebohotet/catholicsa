@@ -11,12 +11,16 @@ import '../theme/app_theme.dart';
 /// developer-facing built/not-built annotations trimmed for end users.
 /// Keep the two in sync if either changes.
 class LandingScreen extends StatelessWidget {
-  /// What to show once the user taps "Continue" - the onboarding check
-  /// in `app.dart`, kept as a parameter so this screen doesn't need to
-  /// know about onboarding at all.
-  final WidgetBuilder next;
+  /// What to do once the user taps "Continue" - checking onboarding
+  /// state and going to the right next route is app.dart's job now (via
+  /// go_router), not this screen's - kept as a plain callback so this
+  /// screen still doesn't need to know about onboarding or routing at
+  /// all. Was a WidgetBuilder before real routing existed; a VoidCallback
+  /// is all that's needed now that "next" means "go to a URL", not
+  /// "build a widget".
+  final VoidCallback onContinue;
 
-  const LandingScreen({super.key, required this.next});
+  const LandingScreen({super.key, required this.onContinue});
 
   static const intro =
       'Started as a simple question: on a Sunday, if you\'ve missed Mass at '
@@ -36,10 +40,6 @@ class LandingScreen extends StatelessWidget {
     'Comments and ratings per church',
     'Social media links per church',
   ];
-
-  void _continue(BuildContext context) {
-    Navigator.of(context).pushReplacement(MaterialPageRoute(builder: next));
-  }
 
   @override
   Widget build(BuildContext context) {
@@ -102,7 +102,7 @@ class LandingScreen extends StatelessWidget {
                   width: double.infinity,
                   child: FilledButton(
                     style: FilledButton.styleFrom(backgroundColor: AppColors.brass),
-                    onPressed: () => _continue(context),
+                    onPressed: onContinue,
                     child: const Text('Continue'),
                   ),
                 ),

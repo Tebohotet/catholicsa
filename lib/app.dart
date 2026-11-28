@@ -1,11 +1,17 @@
-import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
 import 'screens/onboarding_screen.dart';
-import 'screens/parish_detail_screen.dart';
 import 'screens/landing_screen.dart';
+import 'screens/map_screen.dart';
+import 'screens/browse_screen.dart';
+import 'screens/readings_screen.dart';
+import 'screens/hymns_screen.dart';
+import 'screens/church_detail_screen.dart';
+import 'screens/parish_detail_screen.dart';
+import 'screens/pdf_viewer_screen.dart';
 import 'providers/design_tokens_provider.dart';
 import 'providers/branding_provider.dart';
 import 'widgets/developer_debug_overlay.dart';
@@ -17,48 +23,148 @@ import 'widgets/developer_debug_overlay.dart';
 final rootScaffoldMessengerKey = GlobalKey<ScaffoldMessengerState>();
 final rootNavigatorKey = GlobalKey<NavigatorState>();
 
-/// Lets a screen (Readings, Hymns) detect when it's been navigated back
-/// to - e.g. after an admin ran a sync or edit on a different screen
+/// Lets a screen (Readings, Hymns, Map) detect when it's been navigated
+/// back to - e.g. after an admin ran a sync or edit on a different screen
 /// and popped back - and refresh its own data automatically, instead of
-/// staying stale until the whole app is manually reloaded.
+/// staying stale until the whole app is manually reloaded. go_router
+/// applies this same observer to every Navigator it builds (root and
+/// every bottom-nav tab's own branch alike), so this keeps working
+/// exactly as before now that those Navigators are built by
+/// StatefulShellRoute instead of by hand.
 final rootRouteObserver = RouteObserver<ModalRoute<void>>();
 
-/// A church link encoded in the page's starting URL on web - e.g.
-/// `https://catholicsa.co.za/church/<parishId>/<churchId>`, the exact
-/// shape `ShareButton` and the QR code on a church page already
-/// generate. Parsed once, directly from the browser's address bar
-/// (`Uri.base`), rather than through Flutter's own router - this app
-/// has no named routes at all, so without this, a shared link or a
-/// scanned QR code always opened the generic home screen instead of
-/// the church it pointed at, no matter how correct the link itself
-/// looked. `Uri.base` is meaningless on non-web (it reflects the
-/// current working directory there), hence the `kIsWeb` guard.
-(String parishId, String churchId)? _churchLinkFromCurrentUrl() {
-  if (!kIsWeb) return null;
-  final match = RegExp(r'^/church/([^/]+)/([^/]+)/?$').firstMatch(Uri.base.path);
-  if (match == null) return null;
-  return (match.group(1)!, match.group(2)!);
+Future<bool> _hasSeenOnboarding() async {
+  final prefs = await SharedPreferences.getInstance();
+  return prefs.getBool('onboarding_seen') ?? false;
 }
 
-/// A parish-only link on web, e.g. `https://catholicsa.co.za/st-jude-parish`
-/// - the "clean URL per parish" piece of the subdomain-per-parish idea,
-/// minus the DNS/custom-domain part: this works today with no extra
-/// Firebase or DNS setup, and a real subdomain can point at this same
-/// path later without changing any app code. Bare top-level path (no
-/// `/church/` prefix, which is handled separately above and always takes
-/// priority), since that's the shape a parish would actually want to
-/// share: `catholicsa.co.za/st-jude-parish`, not
-/// `catholicsa.co.za/parish/st-jude-parish`. A parish's `slug` defaults
-/// to its own Firestore document id (see `Parish.fromFirestore`), so the
-/// id is what this matches against - exactly like the church link above.
-String? _parishLinkFromCurrentUrl() {
-  if (!kIsWeb) return null;
-  final path = Uri.base.path;
-  if (path == '/' || path.isEmpty) return null;
-  final match = RegExp(r'^/([a-zA-Z0-9_-]+)/?$').firstMatch(path);
-  if (match == null) return null;
-  return match.group(1)!;
-}
+/// Real, URL-backed routing (go_router) - added 2026-11-28 to fix two
+/// real problems the project owner hit and reported the same night:
+/// a browser refresh always landing back on the About Us page no matter
+/// how deep into the app you were ("no start over from about us"), and
+/// losing which bottom-nav tab you were on across a refresh ("I need
+/// refresh to keep in hymns"). Before this, the whole app was one
+/// unnamed widget tree - `_RootDecider` -> `_OnboardingDecider` ->
+/// `HomeScreen`'s own manually-built per-tab Navigators - with no URL at
+/// all behind any of it, so a refresh had no way to know where you'd
+/// been and always just started over from the very first screen.
+///
+/// **Phase 1, done this pass**: the 4 bottom-nav tabs (/map, /browse,
+/// /readings, /hymns), the Hymns tab's built-in PDF viewer
+/// (/hymns/pdf), and the existing church/parish share-links
+/// (previously hand-parsed from Uri.base in this same file - see git
+/// history) are all real go_router routes now. Refreshing on any of
+/// these keeps you exactly there, not back at About Us.
+///
+/// **Phase 2, not done yet**: everything pushed *on top of* a tab or
+/// the PDF viewer (church/parish detail reached by drilling into
+/// Browse, Admin Panel, Account, Messages, and dozens more screens
+/// throughout the app) still uses plain in-memory Navigator pushes, the
+/// same as before this pass. Refreshing there now drops back to that
+/// tab's own root (e.g. Browse) instead of all the way to About Us -
+/// already a real improvement - but not back to the exact pushed screen
+/// you were on. Converting those too means giving each one its own
+/// go_router route, a much bigger job (genuinely "dozens of screens"),
+/// left for its own future pass rather than risking a much larger,
+/// riskier change in one go tonight.
+final GoRouter appRouter = GoRouter(
+  navigatorKey: rootNavigatorKey,
+  observers: [rootRouteObserver, HomeNavObserver()],
+  initialLocation: '/',
+  routes: [
+    // The app's first screen on a true cold start (or anyone who
+    // bookmarks/refreshes bare "/" itself) - shown every time, not just
+    // once, same deliberate choice as before this migration (church/
+    // parish links below still skip it entirely, same priority as
+    // before too).
+    GoRoute(
+      path: '/',
+      builder: (context, state) => LandingScreen(
+        onContinue: () async {
+          final seen = await _hasSeenOnboarding();
+          if (context.mounted) context.go(seen ? '/map' : '/onboarding');
+        },
+      ),
+    ),
+    GoRoute(
+      path: '/onboarding',
+      builder: (context, state) => const OnboardingScreen(),
+    ),
+    // A church link in the starting URL / from a QR code, e.g.
+    // catholicsa.co.za/church/<parishId>/<churchId> - the exact shape
+    // ShareButton and a church page's own QR code already generate, so
+    // this path can't change without breaking links already printed or
+    // shared. `parentNavigatorKey` is what makes that possible together
+    // with keeping the bottom nav/mini-player visible underneath: the
+    // URL itself stays a plain top-level path, but the actual screen is
+    // pushed onto the Map tab's own Navigator (branch index 0) rather
+    // than the app's root one - same place `_openInitialChurchLinkIfAny`
+    // used to push it by hand before real routing existed.
+    GoRoute(
+      path: '/church/:parishId/:churchId',
+      parentNavigatorKey: homeBranchNavigatorKeys[0],
+      builder: (context, state) => ChurchDetailScreen(
+        parishId: state.pathParameters['parishId']!,
+        churchId: state.pathParameters['churchId']!,
+      ),
+    ),
+    StatefulShellRoute.indexedStack(
+      builder: (context, state, navigationShell) => HomeShell(navigationShell: navigationShell),
+      branches: [
+        StatefulShellBranch(
+          navigatorKey: homeBranchNavigatorKeys[0],
+          routes: [GoRoute(path: '/map', builder: (context, state) => const MapScreen())],
+        ),
+        StatefulShellBranch(
+          navigatorKey: homeBranchNavigatorKeys[1],
+          routes: [GoRoute(path: '/browse', builder: (context, state) => const BrowseScreen())],
+        ),
+        StatefulShellBranch(
+          navigatorKey: homeBranchNavigatorKeys[2],
+          routes: [GoRoute(path: '/readings', builder: (context, state) => const ReadingsScreen())],
+        ),
+        StatefulShellBranch(
+          navigatorKey: homeBranchNavigatorKeys[3],
+          routes: [
+            GoRoute(
+              path: '/hymns',
+              builder: (context, state) => const HymnsScreen(),
+              routes: [
+                // The built-in PDF viewer, reached either from a hymn's
+                // "Preview" button or the audio-player dialog's "View
+                // PDF" button (see hymns_screen.dart) - url/title travel
+                // as query parameters specifically so this URL survives
+                // a refresh intact, which a route needing more than
+                // plain strings in its path/query generally can't do as
+                // cleanly.
+                GoRoute(
+                  path: 'pdf',
+                  builder: (context, state) => PdfViewerScreen(
+                    url: state.uri.queryParameters['url'] ?? '',
+                    title: state.uri.queryParameters['title'] ?? '',
+                  ),
+                ),
+              ],
+            ),
+          ],
+        ),
+      ],
+    ),
+    // A bare parish link, e.g. catholicsa.co.za/st-jude-parish - shown
+    // standalone, with no bottom nav underneath, same as before this
+    // migration (unlike the church link above, which deliberately nests
+    // inside the Map tab instead - that was already the one difference
+    // between the two kinds of link before real routing existed, not
+    // something new here). Registered LAST deliberately: go_router tries
+    // routes in list order and this single-segment wildcard would
+    // otherwise swallow /map, /browse, /readings, /hymns, and /onboarding
+    // before any of them got a chance to match.
+    GoRoute(
+      path: '/:parishSlug',
+      builder: (context, state) => ParishDetailScreen(parishId: state.pathParameters['parishSlug']!),
+    ),
+  ],
+);
 
 Color _parseHexColor(String hex, Color fallback) {
   try {
@@ -94,10 +200,15 @@ class CatholicSAApp extends ConsumerWidget {
       orElse: () => 'CatholicSA',
     );
 
-    return MaterialApp(
+    return MaterialApp.router(
       scaffoldMessengerKey: rootScaffoldMessengerKey,
-      navigatorKey: rootNavigatorKey,
-      navigatorObservers: [rootRouteObserver],
+      // routerConfig replaces home: - routing/navigation now flows
+      // through appRouter (defined above, built once at module load, not
+      // rebuilt on every CatholicSAApp rebuild - recreating the GoRouter
+      // itself on every design-token/branding update would destroy all
+      // navigation state, so it deliberately lives outside this build
+      // method).
+      routerConfig: appRouter,
       title: appName,
       debugShowCheckedModeBanner: false,
       builder: (context, child) => DeveloperDebugOverlay(child: child ?? const SizedBox.shrink()),
@@ -114,63 +225,6 @@ class CatholicSAApp extends ConsumerWidget {
           style: FilledButton.styleFrom(shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(cornerRadius))),
         ),
       ),
-      home: const _RootDecider(),
-    );
-  }
-}
-
-/// The app's first screen on cold start. A church or parish link in the
-/// starting URL goes straight there; otherwise the "About Us" landing
-/// page shows - every time, not just once - followed by the onboarding
-/// check.
-class _RootDecider extends StatelessWidget {
-  const _RootDecider();
-
-  @override
-  Widget build(BuildContext context) {
-    // A church link in the starting URL takes priority over the landing
-    // page and onboarding - someone who followed a shared link or scanned
-    // a QR code wants that church, not an introduction or a first-run tour.
-    final churchLink = _churchLinkFromCurrentUrl();
-    if (churchLink != null) {
-      return HomeScreen(initialChurchParishId: churchLink.$1, initialChurchId: churchLink.$2);
-    }
-    // A bare parish link (`/st-jude-parish`) opens that parish directly,
-    // same priority as a church link above - someone who followed a
-    // shared parish link wants that parish, not an introduction or the
-    // Browse hierarchy's default landing spot.
-    final parishLink = _parishLinkFromCurrentUrl();
-    if (parishLink != null) {
-      return ParishDetailScreen(parishId: parishLink);
-    }
-    return LandingScreen(next: (_) => const _OnboardingDecider());
-  }
-}
-
-/// Decides whether this device has seen onboarding before - checked
-/// locally (not tied to a signed-in account) since onboarding should show
-/// before anyone's necessarily signed in at all.
-class _OnboardingDecider extends StatelessWidget {
-  const _OnboardingDecider();
-
-  Future<bool> _hasSeenOnboarding() async {
-    final prefs = await SharedPreferences.getInstance();
-    return prefs.getBool('onboarding_seen') ?? false;
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    // Church/parish link handling now happens one step earlier, in
-    // _RootDecider, ahead of the landing page - so by the time we're
-    // here, neither applies and there's nothing left to check for them.
-    return FutureBuilder<bool>(
-      future: _hasSeenOnboarding(),
-      builder: (context, snap) {
-        if (!snap.hasData) {
-          return const Scaffold(backgroundColor: Color(0xFFE9E2D0), body: Center(child: CircularProgressIndicator()));
-        }
-        return snap.data! ? const HomeScreen() : const OnboardingScreen();
-      },
     );
   }
 }
