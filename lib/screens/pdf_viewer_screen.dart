@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
+import '../widgets/profile_menu_button.dart';
 
 /// Reusable in-app PDF viewer - replaces the old pattern of handing every
 /// PDF link off to url_launcher (which opened the browser's/device's own
@@ -65,6 +66,11 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                     icon: const Icon(Icons.open_in_new, color: Colors.white, size: 20),
                     onPressed: _openExternally,
                   ),
+                  // Was missing from this screen specifically - confirmed
+                  // from the project owner's own screenshot, same overlap-
+                  // class fix already applied to every other screen
+                  // sharing this header shape (see PROJECT_STATUS.md).
+                  const ProfileMenuButton(embedded: true),
                 ],
               ),
             ),

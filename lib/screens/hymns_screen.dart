@@ -1,11 +1,11 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:audioplayers/audioplayers.dart';
 import '../services/firestore_service.dart';
 import '../providers/view_as_role_provider.dart';
 import '../app.dart';
 import '../theme/app_theme.dart';
 import '../widgets/profile_menu_button.dart';
+import '../services/hymn_player_service.dart';
 import 'pdf_viewer_screen.dart';
 
 /// "Preview" here opens the PDF in the built-in PdfViewerScreen, so a
@@ -369,36 +369,22 @@ class _HymnAudioPlayerDialog extends StatefulWidget {
 }
 
 class _HymnAudioPlayerDialogState extends State<_HymnAudioPlayerDialog> {
-  final _player = AudioPlayer();
-  PlayerState _state = PlayerState.stopped;
-  Duration _position = Duration.zero;
-  Duration _duration = Duration.zero;
-  String? _error;
+  // Not this dialog's own player any more - HymnPlayerService.instance is
+  // one shared, app-wide player (see that file's doc comment for why).
+  // This dialog is now just a UI on top of whatever it's doing - closing
+  // it does NOT stop playback any more, same as minimizing a music app
+  // rather than quitting it. Stopping it is what the mini-player bar's
+  // own close (X) button is for (see HomeScreen's bottomNavigationBar).
+  final _player = HymnPlayerService.instance;
 
   @override
   void initState() {
     super.initState();
-    _player.onPlayerStateChanged.listen((s) { if (mounted) setState(() => _state = s); });
-    _player.onPositionChanged.listen((p) { if (mounted) setState(() => _position = p); });
-    _player.onDurationChanged.listen((d) { if (mounted) setState(() => _duration = d); });
-    _start();
+    _player.addListener(_onChange);
+    _player.play(title: widget.title, audioUrl: widget.audioUrl, pdfUrl: widget.pdfUrl);
   }
 
-  Future<void> _start() async {
-    try {
-      await _player.play(UrlSource(widget.audioUrl));
-    } catch (e) {
-      if (mounted) setState(() => _error = 'Could not play this hymn: $e');
-    }
-  }
-
-  Future<void> _togglePlayPause() async {
-    if (_state == PlayerState.playing) {
-      await _player.pause();
-    } else {
-      await _player.resume();
-    }
-  }
+  void _onChange() { if (mounted) setState(() {}); }
 
   String _formatDuration(Duration d) {
     final minutes = d.inMinutes.remainder(60).toString().padLeft(1, '0');
@@ -408,7 +394,7 @@ class _HymnAudioPlayerDialogState extends State<_HymnAudioPlayerDialog> {
 
   @override
   void dispose() {
-    _player.dispose();
+    _player.removeListener(_onChange);
     super.dispose();
   }
 
@@ -419,16 +405,16 @@ class _HymnAudioPlayerDialogState extends State<_HymnAudioPlayerDialog> {
       title: Text(widget.title, style: const TextStyle(fontFamily: appSerif, fontSize: 17)),
       content: SizedBox(
         width: 360,
-        child: _error != null
-            ? Text(_error!, style: const TextStyle(fontSize: 13, color: Colors.redAccent))
+        child: _player.error != null
+            ? Text(_player.error!, style: const TextStyle(fontSize: 13, color: Colors.redAccent))
             : Column(
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   Slider(
                     activeColor: AppColors.brass,
                     min: 0,
-                    max: _duration.inMilliseconds > 0 ? _duration.inMilliseconds.toDouble() : 1,
-                    value: _position.inMilliseconds.toDouble().clamp(0, _duration.inMilliseconds > 0 ? _duration.inMilliseconds.toDouble() : 1),
+                    max: _player.duration.inMilliseconds > 0 ? _player.duration.inMilliseconds.toDouble() : 1,
+                    value: _player.position.inMilliseconds.toDouble().clamp(0, _player.duration.inMilliseconds > 0 ? _player.duration.inMilliseconds.toDouble() : 1),
                     onChanged: (v) => _player.seek(Duration(milliseconds: v.round())),
                   ),
                   Padding(
@@ -436,8 +422,8 @@ class _HymnAudioPlayerDialogState extends State<_HymnAudioPlayerDialog> {
                     child: Row(
                       mainAxisAlignment: MainAxisAlignment.spaceBetween,
                       children: [
-                        Text(_formatDuration(_position), style: const TextStyle(fontSize: 11, color: Colors.black54)),
-                        Text(_formatDuration(_duration), style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                        Text(_formatDuration(_player.position), style: const TextStyle(fontSize: 11, color: Colors.black54)),
+                        Text(_formatDuration(_player.duration), style: const TextStyle(fontSize: 11, color: Colors.black54)),
                       ],
                     ),
                   ),
@@ -445,8 +431,8 @@ class _HymnAudioPlayerDialogState extends State<_HymnAudioPlayerDialog> {
                   IconButton(
                     iconSize: 48,
                     color: AppColors.brass,
-                    icon: Icon(_state == PlayerState.playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
-                    onPressed: _togglePlayPause,
+                    icon: Icon(_player.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled),
+                    onPressed: _player.togglePlayPause,
                   ),
                 ],
               ),
@@ -461,7 +447,7 @@ class _HymnAudioPlayerDialogState extends State<_HymnAudioPlayerDialog> {
             },
           ),
         TextButton(
-          onPressed: () { _player.stop(); Navigator.pop(context); },
+          onPressed: () => Navigator.pop(context),
           child: const Text('Close'),
         ),
       ],

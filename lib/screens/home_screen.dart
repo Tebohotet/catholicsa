@@ -8,6 +8,7 @@ import '../services/notification_service.dart';
 import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/profile_menu_button.dart';
+import '../services/hymn_player_service.dart';
 import '../app.dart';
 
 class HomeScreen extends StatefulWidget {
@@ -231,14 +232,80 @@ class _HomeScreenState extends State<HomeScreen> {
               ),
           ],
         ),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: _index,
-          onDestinationSelected: _onTap,
-          destinations: const [
-            NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: 'Map'),
-            NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Browse'),
-            NavigationDestination(icon: Icon(Icons.menu_book_outlined), selectedIcon: Icon(Icons.menu_book), label: 'Readings'),
-            NavigationDestination(icon: Icon(Icons.library_music_outlined), selectedIcon: Icon(Icons.library_music), label: 'Hymns'),
+        // A Column, not just the NavigationBar directly - the mini hymn-
+        // player bar (see _MiniHymnPlayerBar below) sits directly above
+        // the nav bar whenever a hymn is loaded, and disappears entirely
+        // the instant nothing's playing (AnimatedBuilder listens to
+        // HymnPlayerService.instance, a ChangeNotifier, so this rebuilds
+        // on its own the moment play/pause/stop happens anywhere in the
+        // app - no need for this screen to know who started playback).
+        // The project owner's own ask: "Can I have that music player
+        // thing at the bottom of the pages incase I want to stop a song,
+        // I can while I am on other pages" - this sits in HomeScreen's
+        // own Scaffold, which stays on screen under every pushed screen
+        // in every tab (PdfViewerScreen included), unlike the floating
+        // ProfileMenuButton above which deliberately hides on a push.
+        bottomNavigationBar: AnimatedBuilder(
+          animation: HymnPlayerService.instance,
+          builder: (context, _) => Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (HymnPlayerService.instance.hasTrack) const _MiniHymnPlayerBar(),
+              NavigationBar(
+                selectedIndex: _index,
+                onDestinationSelected: _onTap,
+                destinations: const [
+                  NavigationDestination(icon: Icon(Icons.map_outlined), selectedIcon: Icon(Icons.map), label: 'Map'),
+                  NavigationDestination(icon: Icon(Icons.explore_outlined), selectedIcon: Icon(Icons.explore), label: 'Browse'),
+                  NavigationDestination(icon: Icon(Icons.menu_book_outlined), selectedIcon: Icon(Icons.menu_book), label: 'Readings'),
+                  NavigationDestination(icon: Icon(Icons.library_music_outlined), selectedIcon: Icon(Icons.library_music), label: 'Hymns'),
+                ],
+              ),
+            ],
+          ),
+        ),
+      ),
+    );
+  }
+}
+
+/// The persistent "something's playing" bar - title, play/pause, and a
+/// stop (X) button. Reads HymnPlayerService.instance directly rather than
+/// taking it as a constructor parameter, since it's a true app-wide
+/// singleton (same reason the player dialog in hymns_screen.dart reads it
+/// the same way) - there's only ever one of these on screen at a time, so
+/// there's no real case where it'd need to point at a different instance.
+class _MiniHymnPlayerBar extends StatelessWidget {
+  const _MiniHymnPlayerBar();
+
+  @override
+  Widget build(BuildContext context) {
+    final player = HymnPlayerService.instance;
+    return Container(
+      color: AppColors.stone,
+      padding: const EdgeInsets.symmetric(horizontal: 4),
+      child: SafeArea(
+        top: false,
+        bottom: false,
+        child: Row(
+          children: [
+            IconButton(
+              icon: Icon(player.isPlaying ? Icons.pause_circle_filled : Icons.play_circle_filled, color: Colors.white),
+              onPressed: player.togglePlayPause,
+            ),
+            Expanded(
+              child: Text(
+                player.title ?? '',
+                style: const TextStyle(color: Colors.white, fontSize: 13, fontWeight: FontWeight.w600),
+                maxLines: 1,
+                overflow: TextOverflow.ellipsis,
+              ),
+            ),
+            IconButton(
+              tooltip: 'Stop',
+              icon: const Icon(Icons.close, color: Colors.white70, size: 20),
+              onPressed: player.stop,
+            ),
           ],
         ),
       ),
