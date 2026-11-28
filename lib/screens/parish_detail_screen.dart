@@ -7,6 +7,7 @@ import '../models/church.dart';
 import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
 import '../widgets/church_form_dialogs.dart';
+import '../widgets/profile_menu_button.dart';
 import 'church_detail_screen.dart';
 import '../widgets/hierarchy_summary_sections.dart';
 import 'search_screen.dart';
@@ -90,6 +91,8 @@ class _ParishDetailScreenState extends State<ParishDetailScreen> {
                                     builder: (_) => SearchScreen(scopeParishId: widget.parishId, scopeParishName: parish.name),
                                   )),
                                 ),
+                                const SizedBox(width: 4),
+                                const ProfileMenuButton(embedded: true),
                               ],
                             ),
                             const SizedBox(height: 16),
@@ -224,23 +227,30 @@ class _ParishDetailScreenState extends State<ParishDetailScreen> {
 
                           const SizedBox(height: 28),
                           const SectionLabel(numeral: 'II', title: 'Parochial Notices'),
-                          NoticesSummarySection(future: FirestoreService().getParishNotices(widget.parishId), tagKey: 'churchName'),
+                          // includeHidden: _canManage - same "admin sees
+                          // everything" rule as the rest of this screen's
+                          // own admin-only sections above, now that a
+                          // hidden church's notices/prayers/courses/
+                          // media/listings are correctly excluded for
+                          // everyone else (see content_courses_service.dart
+                          // and marketplace_admin_service.dart).
+                          NoticesSummarySection(future: FirestoreService().getParishNotices(widget.parishId, includeHidden: _canManage), tagKey: 'churchName'),
 
                           const SizedBox(height: 28),
                           const SectionLabel(numeral: 'III', title: 'Prayers'),
-                          PrayersSummarySection(future: FirestoreService().getParishPrayers(widget.parishId), tagKey: 'churchName'),
+                          PrayersSummarySection(future: FirestoreService().getParishPrayers(widget.parishId, includeHidden: _canManage), tagKey: 'churchName'),
 
                           const SizedBox(height: 28),
                           const SectionLabel(numeral: 'IV', title: 'Courses'),
-                          CoursesSummarySection(future: FirestoreService().getParishCourses(widget.parishId), tagKey: 'churchName'),
+                          CoursesSummarySection(future: FirestoreService().getParishCourses(widget.parishId, includeHidden: _canManage), tagKey: 'churchName'),
 
                           const SizedBox(height: 28),
                           const SectionLabel(numeral: 'V', title: 'Gallery'),
-                          GallerySummarySection(future: FirestoreService().getParishApprovedMedia(widget.parishId)),
+                          GallerySummarySection(future: FirestoreService().getParishApprovedMedia(widget.parishId, includeHidden: _canManage)),
 
                           const SizedBox(height: 28),
                           const SectionLabel(numeral: 'VI', title: 'Marketplace'),
-                          ProductsSummarySection(future: FirestoreService().getParishProducts(widget.parishId), tagKey: 'churchName', parishId: widget.parishId),
+                          ProductsSummarySection(future: FirestoreService().getParishProducts(widget.parishId, includeHidden: _canManage), tagKey: 'churchName', parishId: widget.parishId),
 
                           const SizedBox(height: 40),
                         ],

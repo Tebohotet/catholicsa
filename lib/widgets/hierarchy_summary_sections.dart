@@ -3,6 +3,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
 import '../screens/course_detail_screen.dart';
 import '../screens/product_detail_screen.dart';
+import '../screens/church_detail_screen.dart';
 import '../screens/church_detail/photo_gallery.dart';
 import 'async_section.dart';
 
@@ -10,6 +11,26 @@ import 'async_section.dart';
 /// Parish level, parishName at Diocese level, dioceseName at Province
 /// level, provinceName at National level. Same widget, same rendering,
 /// just told what to label each item with.
+/// Both Notices and Prayers items carry a `parishId`/`churchId` by the
+/// time they reach here (added at the parish-level rollup itself now -
+/// see getParishNotices/getParishPrayers in content_courses_service.dart)
+/// regardless of which level (Parish/Diocese/Province/National) this
+/// widget is actually being shown from - so the same tap target works
+/// everywhere this is used. Goes to that item's own church page, the
+/// same destination Courses/Marketplace already use for their own tap
+/// targets - there's no standalone "single notice" or "single prayer"
+/// page in this app, so seeing it in its home context (alongside
+/// everything else that church has) is the real destination, not a dead
+/// end.
+void _openChurchFor(BuildContext context, Map<String, dynamic> item) {
+  final parishId = item['parishId'] as String?;
+  final churchId = item['churchId'] as String?;
+  if (parishId == null || churchId == null) return;
+  Navigator.push(context, MaterialPageRoute(
+    builder: (_) => ChurchDetailScreen(parishId: parishId, churchId: churchId, parishName: item['parishName'] as String?),
+  ));
+}
+
 class NoticesSummarySection extends StatelessWidget {
   final Future<List<Map<String, dynamic>>> future;
   final String tagKey;
@@ -23,18 +44,23 @@ class NoticesSummarySection extends StatelessWidget {
       emptyMessage: 'No notices posted anywhere here yet.',
       builder: (context, notices) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: notices.map((n) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Expanded(child: Text(n['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
-                Pill(n[tagKey] ?? '', tone: 'outline'),
-              ]),
-              const SizedBox(height: 2),
-              Text(n['body'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.black87)),
-            ],
+        children: notices.map((n) => InkWell(
+          onTap: () => _openChurchFor(context, n),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Expanded(child: Text(n['title'] ?? '', style: const TextStyle(fontWeight: FontWeight.w600, fontSize: 13))),
+                  Pill(n[tagKey] ?? '', tone: 'outline'),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right, size: 16, color: Colors.black45),
+                ]),
+                const SizedBox(height: 2),
+                Text(n['body'] ?? '', style: const TextStyle(fontSize: 12, color: Colors.black87)),
+              ],
+            ),
           ),
         )).toList(),
       ),
@@ -55,17 +81,22 @@ class PrayersSummarySection extends StatelessWidget {
       emptyMessage: 'No prayers added anywhere here yet.',
       builder: (context, prayers) => Column(
         crossAxisAlignment: CrossAxisAlignment.start,
-        children: prayers.map((p) => Padding(
-          padding: const EdgeInsets.only(bottom: 12),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
-              Row(children: [
-                Expanded(child: Text(p['title'] ?? '', style: const TextStyle(fontFamily: appSerif, fontSize: 15))),
-                Pill(p[tagKey] ?? '', tone: 'outline'),
-              ]),
-              Text(p['text'] ?? '', style: const TextStyle(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
-            ],
+        children: prayers.map((p) => InkWell(
+          onTap: () => _openChurchFor(context, p),
+          child: Padding(
+            padding: const EdgeInsets.only(bottom: 12),
+            child: Column(
+              crossAxisAlignment: CrossAxisAlignment.start,
+              children: [
+                Row(children: [
+                  Expanded(child: Text(p['title'] ?? '', style: const TextStyle(fontFamily: appSerif, fontSize: 15))),
+                  Pill(p[tagKey] ?? '', tone: 'outline'),
+                  const SizedBox(width: 4),
+                  const Icon(Icons.chevron_right, size: 16, color: Colors.black45),
+                ]),
+                Text(p['text'] ?? '', style: const TextStyle(fontSize: 12), maxLines: 2, overflow: TextOverflow.ellipsis),
+              ],
+            ),
           ),
         )).toList(),
       ),

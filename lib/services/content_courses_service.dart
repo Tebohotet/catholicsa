@@ -295,8 +295,20 @@ extension ContentCoursesService on FirestoreService {
     final snap = await query.get();
     final all = snap.docs.map((d) => {'id': d.id, ...d.data()}).toList();
     if (!onlyPublished) return all;
+    // A separate, orthogonal switch from `status` above - the project
+    // owner's own ask: "Be able to hide the Course... manage this course
+    // if you are an admin." `status` still drives the draft -> pending
+    // -> published review workflow unchanged; `isActive` (same absent-
+    // means-visible convention as Church/Parish/Province) just lets an
+    // already-published course be quickly hidden from public listings
+    // and un-hidden again, without re-running it through review. A
+    // direct getCourse(id) fetch (CourseDetailScreen's own page) is
+    // deliberately NOT gated by this - same precedent as a hidden
+    // church's own detail page still opening directly - only *listings*
+    // (here, and every getXCourses rollup above) are filtered.
+    final visible = all.where((c) => (c['isActive'] as bool?) ?? true).toList();
     final canSeeDevOnly = await _canViewDevOnlyContent();
-    return canSeeDevOnly ? all : all.where((c) => c['devOnly'] != true).toList();
+    return canSeeDevOnly ? visible : visible.where((c) => c['devOnly'] != true).toList();
   }
 
   Future<Map<String, dynamic>> getCourse(String parishId, String churchId, String courseId) async {
@@ -344,6 +356,26 @@ extension ContentCoursesService on FirestoreService {
         .collection('churches').doc(churchId)
         .collection('courses').doc(courseId)
         .update({'status': status, 'reviewNotes': reviewNotes});
+  }
+
+  /// Quick public/hidden switch for an already-published course - see
+  /// getCourses' own comment above for why this is a separate field from
+  /// `status`, not a review-workflow state. firestore.rules' existing
+  /// course-update rule already allows any parish admin to change any
+  /// field except `status` itself (only a priest/Super Admin can do
+  /// that) - so this needed no rules change to work for a plain parish
+  /// admin, not just a priest.
+  Future<void> setCourseActive({
+    required String parishId,
+    required String churchId,
+    required String courseId,
+    required bool isActive,
+  }) async {
+    await _db
+        .collection('parishes').doc(parishId)
+        .collection('churches').doc(churchId)
+        .collection('courses').doc(courseId)
+        .update({'isActive': isActive});
   }
 
   Future<List<Map<String, dynamic>>> getLessons(String parishId, String churchId, String courseId) async {
@@ -1042,32 +1074,45 @@ extension ContentCoursesService on FirestoreService {
   // denormalization or a Cloud Function rollup once a diocese has dozens
   // of parishes - not a problem yet, worth knowing before it is one.
 
-  Future<List<Map<String, dynamic>>> getParishNotices(String parishId) async {
-    final churches = await getChurches(parishId);
+  // `includeHidden` added 2026-11-28, alongside Province's own new
+  // `isActive` field - the project owner's real, reported bug: "If the
+  // church that it belongs to is hidden, all its items should be
+  // hidden," which on inspection was true of every rollup below, not
+  // just notices/prayers, and one level up too (a hidden/inactive
+  // *parish*'s content was still surfacing at Diocese/Province/National
+  // level the same way). Default false (hidden stays hidden) everywhere
+  // except where a Super Admin's own Browse view passes true, mirroring
+  // the already-established "Super Admin sees everything" rule Parish's
+  // own isActive already follows.
+  Future<List<Map<String, dynamic>>> getParishNotices(String parishId, {bool includeHidden = false}) async {
+    final allChurches = await getChurches(parishId);
+    final churches = includeHidden ? allChurches : allChurches.where((c) => c.isActive).toList();
     final results = <Map<String, dynamic>>[];
     for (final c in churches) {
       final notices = await getNotices(parishId, c.id);
       for (final n in notices) {
-        results.add({...n, 'churchId': c.id, 'churchName': c.name});
+        results.add({...n, 'parishId': parishId, 'churchId': c.id, 'churchName': c.name});
       }
     }
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getParishPrayers(String parishId) async {
-    final churches = await getChurches(parishId);
+  Future<List<Map<String, dynamic>>> getParishPrayers(String parishId, {bool includeHidden = false}) async {
+    final allChurches = await getChurches(parishId);
+    final churches = includeHidden ? allChurches : allChurches.where((c) => c.isActive).toList();
     final results = <Map<String, dynamic>>[];
     for (final c in churches) {
       final prayers = await getPrayers(parishId, c.id);
       for (final p in prayers) {
-        results.add({...p, 'churchId': c.id, 'churchName': c.name});
+        results.add({...p, 'parishId': parishId, 'churchId': c.id, 'churchName': c.name});
       }
     }
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getParishCourses(String parishId) async {
-    final churches = await getChurches(parishId);
+  Future<List<Map<String, dynamic>>> getParishCourses(String parishId, {bool includeHidden = false}) async {
+    final allChurches = await getChurches(parishId);
+    final churches = includeHidden ? allChurches : allChurches.where((c) => c.isActive).toList();
     final results = <Map<String, dynamic>>[];
     for (final c in churches) {
       final courses = await getCourses(parishId, c.id, onlyPublished: true);
@@ -1080,8 +1125,9 @@ extension ContentCoursesService on FirestoreService {
 
   /// Formatted directly in the shape PhotoTile/GalleryViewer already expect,
   /// so the parish gallery can reuse those exact widgets with zero changes.
-  Future<List<Map<String, String>>> getParishApprovedMedia(String parishId) async {
-    final churches = await getChurches(parishId);
+  Future<List<Map<String, String>>> getParishApprovedMedia(String parishId, {bool includeHidden = false}) async {
+    final allChurches = await getChurches(parishId);
+    final churches = includeHidden ? allChurches : allChurches.where((c) => c.isActive).toList();
     final results = <Map<String, String>>[];
     for (final c in churches) {
       final media = await getMedia(parishId, c.id, onlyApproved: true);
@@ -1101,11 +1147,12 @@ extension ContentCoursesService on FirestoreService {
   }
 
   // ---------- Diocese-wide summaries (loop parishes, reuse the parish-level rollup) ----------
-  Future<List<Map<String, dynamic>>> getDioceseNotices(String dioceseId) async {
-    final parishes = await getParishes(dioceseId);
+  Future<List<Map<String, dynamic>>> getDioceseNotices(String dioceseId, {bool includeHidden = false}) async {
+    final allParishes = await getParishes(dioceseId);
+    final parishes = includeHidden ? allParishes : allParishes.where((p) => (p['isActive'] as bool?) ?? true).toList();
     final results = <Map<String, dynamic>>[];
     for (final p in parishes) {
-      final notices = await getParishNotices(p['id']);
+      final notices = await getParishNotices(p['id'], includeHidden: includeHidden);
       for (final n in notices) {
         results.add({...n, 'parishId': p['id'], 'parishName': p['name']});
       }
@@ -1113,11 +1160,12 @@ extension ContentCoursesService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getDiocesePrayers(String dioceseId) async {
-    final parishes = await getParishes(dioceseId);
+  Future<List<Map<String, dynamic>>> getDiocesePrayers(String dioceseId, {bool includeHidden = false}) async {
+    final allParishes = await getParishes(dioceseId);
+    final parishes = includeHidden ? allParishes : allParishes.where((p) => (p['isActive'] as bool?) ?? true).toList();
     final results = <Map<String, dynamic>>[];
     for (final p in parishes) {
-      final prayers = await getParishPrayers(p['id']);
+      final prayers = await getParishPrayers(p['id'], includeHidden: includeHidden);
       for (final pr in prayers) {
         results.add({...pr, 'parishId': p['id'], 'parishName': p['name']});
       }
@@ -1125,11 +1173,12 @@ extension ContentCoursesService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getDioceseCourses(String dioceseId) async {
-    final parishes = await getParishes(dioceseId);
+  Future<List<Map<String, dynamic>>> getDioceseCourses(String dioceseId, {bool includeHidden = false}) async {
+    final allParishes = await getParishes(dioceseId);
+    final parishes = includeHidden ? allParishes : allParishes.where((p) => (p['isActive'] as bool?) ?? true).toList();
     final results = <Map<String, dynamic>>[];
     for (final p in parishes) {
-      final courses = await getParishCourses(p['id']);
+      final courses = await getParishCourses(p['id'], includeHidden: includeHidden);
       for (final c in courses) {
         results.add({...c, 'parishId': p['id'], 'parishName': p['name']});
       }
@@ -1137,21 +1186,25 @@ extension ContentCoursesService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, String>>> getDioceseApprovedMedia(String dioceseId) async {
-    final parishes = await getParishes(dioceseId);
+  Future<List<Map<String, String>>> getDioceseApprovedMedia(String dioceseId, {bool includeHidden = false}) async {
+    final allParishes = await getParishes(dioceseId);
+    final parishes = includeHidden ? allParishes : allParishes.where((p) => (p['isActive'] as bool?) ?? true).toList();
     final results = <Map<String, String>>[];
     for (final p in parishes) {
-      results.addAll(await getParishApprovedMedia(p['id']));
+      results.addAll(await getParishApprovedMedia(p['id'], includeHidden: includeHidden));
     }
     return results;
   }
 
   // ---------- Province-wide summaries (loop dioceses, reuse the diocese-level rollup) ----------
-  Future<List<Map<String, dynamic>>> getProvinceNotices(String provinceId) async {
+  // No isActive concept on dioceses themselves (not asked for, and
+  // nothing in the app hides one today) - includeHidden just threads
+  // through to the parish/church filtering one level down.
+  Future<List<Map<String, dynamic>>> getProvinceNotices(String provinceId, {bool includeHidden = false}) async {
     final dioceses = await getDioceses(provinceId);
     final results = <Map<String, dynamic>>[];
     for (final d in dioceses) {
-      final notices = await getDioceseNotices(d['id']);
+      final notices = await getDioceseNotices(d['id'], includeHidden: includeHidden);
       for (final n in notices) {
         results.add({...n, 'dioceseId': d['id'], 'dioceseName': d['name']});
       }
@@ -1159,11 +1212,11 @@ extension ContentCoursesService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getProvincePrayers(String provinceId) async {
+  Future<List<Map<String, dynamic>>> getProvincePrayers(String provinceId, {bool includeHidden = false}) async {
     final dioceses = await getDioceses(provinceId);
     final results = <Map<String, dynamic>>[];
     for (final d in dioceses) {
-      final prayers = await getDiocesePrayers(d['id']);
+      final prayers = await getDiocesePrayers(d['id'], includeHidden: includeHidden);
       for (final pr in prayers) {
         results.add({...pr, 'dioceseId': d['id'], 'dioceseName': d['name']});
       }
@@ -1171,11 +1224,11 @@ extension ContentCoursesService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getProvinceCourses(String provinceId) async {
+  Future<List<Map<String, dynamic>>> getProvinceCourses(String provinceId, {bool includeHidden = false}) async {
     final dioceses = await getDioceses(provinceId);
     final results = <Map<String, dynamic>>[];
     for (final d in dioceses) {
-      final courses = await getDioceseCourses(d['id']);
+      final courses = await getDioceseCourses(d['id'], includeHidden: includeHidden);
       for (final c in courses) {
         results.add({...c, 'dioceseId': d['id'], 'dioceseName': d['name']});
       }
@@ -1183,11 +1236,11 @@ extension ContentCoursesService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, String>>> getProvinceApprovedMedia(String provinceId) async {
+  Future<List<Map<String, String>>> getProvinceApprovedMedia(String provinceId, {bool includeHidden = false}) async {
     final dioceses = await getDioceses(provinceId);
     final results = <Map<String, String>>[];
     for (final d in dioceses) {
-      results.addAll(await getDioceseApprovedMedia(d['id']));
+      results.addAll(await getDioceseApprovedMedia(d['id'], includeHidden: includeHidden));
     }
     return results;
   }
@@ -1201,11 +1254,12 @@ extension ContentCoursesService on FirestoreService {
   // directory is genuinely populated nationally - that needs real
   // denormalization or a Cloud Function maintaining rollup documents,
   // not four levels of nested live queries at read time.
-  Future<List<Map<String, dynamic>>> getNationalNotices() async {
-    final provinces = await getProvinces();
+  Future<List<Map<String, dynamic>>> getNationalNotices({bool includeHidden = false}) async {
+    final allProvinces = await getProvinces();
+    final provinces = includeHidden ? allProvinces : allProvinces.where((p) => (p['isActive'] as bool?) ?? true).toList();
     final results = <Map<String, dynamic>>[];
     for (final prov in provinces) {
-      final notices = await getProvinceNotices(prov['id']);
+      final notices = await getProvinceNotices(prov['id'], includeHidden: includeHidden);
       for (final n in notices) {
         results.add({...n, 'provinceId': prov['id'], 'provinceName': prov['name']});
       }
@@ -1213,11 +1267,12 @@ extension ContentCoursesService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getNationalPrayers() async {
-    final provinces = await getProvinces();
+  Future<List<Map<String, dynamic>>> getNationalPrayers({bool includeHidden = false}) async {
+    final allProvinces = await getProvinces();
+    final provinces = includeHidden ? allProvinces : allProvinces.where((p) => (p['isActive'] as bool?) ?? true).toList();
     final results = <Map<String, dynamic>>[];
     for (final prov in provinces) {
-      final prayers = await getProvincePrayers(prov['id']);
+      final prayers = await getProvincePrayers(prov['id'], includeHidden: includeHidden);
       for (final pr in prayers) {
         results.add({...pr, 'provinceId': prov['id'], 'provinceName': prov['name']});
       }
@@ -1225,11 +1280,12 @@ extension ContentCoursesService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getNationalCourses() async {
-    final provinces = await getProvinces();
+  Future<List<Map<String, dynamic>>> getNationalCourses({bool includeHidden = false}) async {
+    final allProvinces = await getProvinces();
+    final provinces = includeHidden ? allProvinces : allProvinces.where((p) => (p['isActive'] as bool?) ?? true).toList();
     final results = <Map<String, dynamic>>[];
     for (final prov in provinces) {
-      final courses = await getProvinceCourses(prov['id']);
+      final courses = await getProvinceCourses(prov['id'], includeHidden: includeHidden);
       for (final c in courses) {
         results.add({...c, 'provinceId': prov['id'], 'provinceName': prov['name']});
       }
@@ -1237,11 +1293,12 @@ extension ContentCoursesService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, String>>> getNationalApprovedMedia() async {
-    final provinces = await getProvinces();
+  Future<List<Map<String, String>>> getNationalApprovedMedia({bool includeHidden = false}) async {
+    final allProvinces = await getProvinces();
+    final provinces = includeHidden ? allProvinces : allProvinces.where((p) => (p['isActive'] as bool?) ?? true).toList();
     final results = <Map<String, String>>[];
     for (final prov in provinces) {
-      results.addAll(await getProvinceApprovedMedia(prov['id']));
+      results.addAll(await getProvinceApprovedMedia(prov['id'], includeHidden: includeHidden));
     }
     return results;
   }

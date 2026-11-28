@@ -8,6 +8,7 @@ import '../services/engagement_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
 import '../widgets/verified_name.dart';
+import '../widgets/profile_menu_button.dart';
 import 'quiz_screen.dart';
 
 class CourseDetailScreen extends StatefulWidget {
@@ -25,10 +26,21 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
   Map<String, dynamic>? _enrollment;
   bool _loading = true;
   bool _enrolling = false;
+  // Gates the "Manage this course" section below - the project owner's
+  // own ask: "Be able to hide the Course for this page, like manage this
+  // course if you are an admin." Same check ParishDetailScreen already
+  // uses for its own "Manage this parish" entry point (any registered
+  // admin of this parish, or Super Admin/Developer for any parish) -
+  // course-level, not church-level, matching firestore.rules' own
+  // isParishAdmin(parishId) scope for course updates.
+  bool _canManage = false;
 
   @override
   void initState() {
     super.initState();
+    AuthService().canManageParish(widget.parishId).then((v) {
+      if (mounted) setState(() => _canManage = v);
+    });
     _load();
   }
 
@@ -122,6 +134,18 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
     }
   }
 
+  /// Same absent-means-visible convention as Church/Parish/Province - a
+  /// separate switch from the course's own draft/pendingReview/published
+  /// review-workflow status (see setCourseActive's own doc comment in
+  /// content_courses_service.dart for why it's deliberately not reusing
+  /// that field).
+  Future<void> _toggleActive(bool isActive) async {
+    await FirestoreService().setCourseActive(
+      parishId: widget.parishId, churchId: widget.churchId, courseId: widget.courseId, isActive: isActive,
+    );
+    await _load();
+  }
+
   Future<void> _openLesson(Map<String, dynamic> lesson) async {
     final completed = (_enrollment?['completedLessonIds'] as List?)?.contains(lesson['id']) ?? false;
     // A lesson with a quiz is gated - completion only ever happens via a
@@ -209,6 +233,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             ],
                           ),
                         ),
+                        const ProfileMenuButton(embedded: true),
                       ],
                     ),
                   ),
@@ -219,6 +244,36 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
+                            // The project owner's own ask: "Be able to hide
+                            // the Course for this page, like manage this
+                            // course if you are an admin." Same
+                            // SwitchListTile look as ParishVisibilitySection
+                            // (admin_panel_screen.dart) - a separate
+                            // isActive field from the course's own
+                            // draft/pendingReview/published review status,
+                            // so hiding a published course from Browse
+                            // doesn't send it back into review.
+                            if (_canManage) ...[
+                              Container(
+                                color: AppColors.paperDark,
+                                padding: const EdgeInsets.symmetric(horizontal: 12),
+                                child: SwitchListTile(
+                                  contentPadding: EdgeInsets.zero,
+                                  dense: true,
+                                  activeThumbColor: AppColors.brass,
+                                  title: const Text('Visible to the public', style: TextStyle(fontSize: 13, fontWeight: FontWeight.w600)),
+                                  subtitle: Text(
+                                    ((_course?['isActive'] as bool?) ?? true)
+                                        ? 'Anyone browsing this church can find this course.'
+                                        : 'Hidden from Browse - only admins can reach it while you finish editing it.',
+                                    style: const TextStyle(fontSize: 11, color: Colors.black45),
+                                  ),
+                                  value: (_course?['isActive'] as bool?) ?? true,
+                                  onChanged: _toggleActive,
+                                ),
+                              ),
+                              const SizedBox(height: 16),
+                            ],
                             Text(_course?['description'] ?? '', style: const TextStyle(fontSize: 14)),
                             const SizedBox(height: 16),
                             if (_course?['meetingLink'] != null)

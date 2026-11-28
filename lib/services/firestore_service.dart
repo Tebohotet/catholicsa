@@ -77,6 +77,21 @@ class FirestoreService {
     await _db.collection('provinces').doc(provinceId).update({'name': name, 'countryId': countryId});
   }
 
+  /// Same shape as Parish/Church's own `isActive` - absent means visible
+  /// (nothing already public vanishes just from this field being added),
+  /// explicitly set to false to hide one. Added 2026-11-28 so a training/
+  /// sandbox province (or any other not ready for the public) can be
+  /// taken out of the public Browse list and every notice/prayer/course/
+  /// product rollup that would otherwise surface its content - see
+  /// getNationalNotices and friends in content_courses_service.dart and
+  /// marketplace_admin_service.dart for where that filtering actually
+  /// happens. A Super Admin keeps seeing every province regardless
+  /// (same `includeHidden` convention used one level down for parishes/
+  /// churches), since this only hides something from the *public*.
+  Future<void> setProvinceActive(String provinceId, bool isActive) async {
+    await _db.collection('provinces').doc(provinceId).update({'isActive': isActive});
+  }
+
   /// The root of the whole hierarchy - every diocese, parish, church, and
   /// everything nested under all of them sits below a province. Deleting
   /// one orphans more than deleting a parish or a church does, not less -

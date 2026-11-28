@@ -523,23 +523,29 @@ extension MarketplaceAdminService on FirestoreService {
   // Parish version), Province walks its dioceses, National walks every
   // province. One pattern, four levels, nothing new to design each time.
 
-  Future<List<Map<String, dynamic>>> getParishProducts(String parishId) async {
-    final churches = await getChurches(parishId);
+  // includeHidden added 2026-11-28, same convention and same bug fix as
+  // the Notices/Prayers/Courses/Gallery rollups in
+  // content_courses_service.dart - a hidden church's (or now, an
+  // inactive parish/province's) listings were still surfacing here too.
+  Future<List<Map<String, dynamic>>> getParishProducts(String parishId, {bool includeHidden = false}) async {
+    final allChurches = await getChurches(parishId);
+    final churches = includeHidden ? allChurches : allChurches.where((c) => c.isActive).toList();
     final results = <Map<String, dynamic>>[];
     for (final c in churches) {
       final products = await getApprovedProducts(parishId, c.id);
       for (final p in products) {
-        results.add({...p, 'churchId': c.id, 'churchName': c.name});
+        results.add({...p, 'parishId': parishId, 'churchId': c.id, 'churchName': c.name});
       }
     }
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getDioceseProducts(String dioceseId) async {
-    final parishes = await getParishes(dioceseId);
+  Future<List<Map<String, dynamic>>> getDioceseProducts(String dioceseId, {bool includeHidden = false}) async {
+    final allParishes = await getParishes(dioceseId);
+    final parishes = includeHidden ? allParishes : allParishes.where((p) => (p['isActive'] as bool?) ?? true).toList();
     final results = <Map<String, dynamic>>[];
     for (final p in parishes) {
-      final products = await getParishProducts(p['id']);
+      final products = await getParishProducts(p['id'], includeHidden: includeHidden);
       for (final prod in products) {
         results.add({...prod, 'parishId': p['id'], 'parishName': p['name']});
       }
@@ -547,11 +553,11 @@ extension MarketplaceAdminService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getProvinceProducts(String provinceId) async {
+  Future<List<Map<String, dynamic>>> getProvinceProducts(String provinceId, {bool includeHidden = false}) async {
     final dioceses = await getDioceses(provinceId);
     final results = <Map<String, dynamic>>[];
     for (final d in dioceses) {
-      final products = await getDioceseProducts(d['id']);
+      final products = await getDioceseProducts(d['id'], includeHidden: includeHidden);
       for (final prod in products) {
         results.add({...prod, 'dioceseId': d['id'], 'dioceseName': d['name']});
       }
@@ -559,11 +565,12 @@ extension MarketplaceAdminService on FirestoreService {
     return results;
   }
 
-  Future<List<Map<String, dynamic>>> getNationalProducts() async {
-    final provinces = await getProvinces();
+  Future<List<Map<String, dynamic>>> getNationalProducts({bool includeHidden = false}) async {
+    final allProvinces = await getProvinces();
+    final provinces = includeHidden ? allProvinces : allProvinces.where((p) => (p['isActive'] as bool?) ?? true).toList();
     final results = <Map<String, dynamic>>[];
     for (final prov in provinces) {
-      final products = await getProvinceProducts(prov['id']);
+      final products = await getProvinceProducts(prov['id'], includeHidden: includeHidden);
       for (final prod in products) {
         results.add({...prod, 'provinceId': prov['id'], 'provinceName': prov['name']});
       }

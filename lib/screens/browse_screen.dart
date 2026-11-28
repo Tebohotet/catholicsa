@@ -176,7 +176,14 @@ class _BrowseHierarchy extends StatelessWidget {
                 builder: (context, snap) {
                   if (snap.hasError) return Text('Error: ${snap.error}');
                   if (!snap.hasData) return const Center(child: CircularProgressIndicator());
-                  final provinces = snap.data!;
+                  // Same isActive-defaults-to-true convention as Parish/
+                  // Church - a Super Admin sees every province regardless
+                  // (same "admin sees everything" rule already applied to
+                  // the Province->Diocese->Parish hierarchy itself), an
+                  // ordinary visitor only sees ones not explicitly hidden.
+                  // Toggle lives in Super Admin -> Directory -> Provinces.
+                  final allProvinces = snap.data!;
+                  final provinces = isAdmin ? allProvinces : allProvinces.where((p) => (p['isActive'] as bool?) ?? true).toList();
                   return Column(
                     crossAxisAlignment: CrossAxisAlignment.start,
                     children: [
@@ -190,23 +197,23 @@ class _BrowseHierarchy extends StatelessWidget {
 
                       const SizedBox(height: 28),
                       const SectionLabel(numeral: 'II', title: 'Parochial Notices'),
-                      NoticesSummarySection(future: FirestoreService().getNationalNotices(), tagKey: 'provinceName'),
+                      NoticesSummarySection(future: FirestoreService().getNationalNotices(includeHidden: isAdmin), tagKey: 'provinceName'),
 
                       const SizedBox(height: 28),
                       const SectionLabel(numeral: 'III', title: 'Prayers'),
-                      PrayersSummarySection(future: FirestoreService().getNationalPrayers(), tagKey: 'provinceName'),
+                      PrayersSummarySection(future: FirestoreService().getNationalPrayers(includeHidden: isAdmin), tagKey: 'provinceName'),
 
                       const SizedBox(height: 28),
                       const SectionLabel(numeral: 'IV', title: 'Courses'),
-                      CoursesSummarySection(future: FirestoreService().getNationalCourses(), tagKey: 'provinceName'),
+                      CoursesSummarySection(future: FirestoreService().getNationalCourses(includeHidden: isAdmin), tagKey: 'provinceName'),
 
                       const SizedBox(height: 28),
                       const SectionLabel(numeral: 'V', title: 'Gallery'),
-                      GallerySummarySection(future: FirestoreService().getNationalApprovedMedia()),
+                      GallerySummarySection(future: FirestoreService().getNationalApprovedMedia(includeHidden: isAdmin)),
 
                       const SizedBox(height: 28),
                       const SectionLabel(numeral: 'VI', title: 'Marketplace'),
-                      ProductsSummarySection(future: FirestoreService().getNationalProducts(), tagKey: 'provinceName'),
+                      ProductsSummarySection(future: FirestoreService().getNationalProducts(includeHidden: isAdmin), tagKey: 'provinceName'),
                     ],
                   );
                 },

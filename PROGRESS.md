@@ -85,6 +85,21 @@ by definition, regardless of what its own status says.
   hedge.
 - ⚠️ Search only does substring matching after a full collectionGroup
   fetch - fine at current scale, not built to scale further
+- 🟡 **Province-level hide/show, added 2026-11-28** - same hide switch
+  already used for Church/Parish, now extended one level up. A new eye
+  icon on each province row in Super Admin -> Directory -> Provinces
+  hides it from Browse for ordinary viewers (admins still see
+  everything, same rule as Parish). Not yet tried live.
+- 🟡 **Real pre-existing bug fixed, same night: hiding a church or
+  parish did not actually hide its notices/prayers/courses/photos/
+  marketplace listings from the Diocese/Province/National rollups
+  above it** - confirmed by reading every rollup method, none filtered
+  by the hide switch at all. Fixed everywhere at once rather than one
+  rollup at a time. Not yet tried live.
+- 🟡 **Tap-through added to Notices and Prayers**, added 2026-11-28 -
+  these were the only two summary types anywhere in the app with no
+  tap target; tapping one now opens the church it belongs to, same as
+  Courses/Marketplace already did. Not yet tried live.
 
 ## Courses
 
@@ -136,6 +151,15 @@ by definition, regardless of what its own status says.
   favourable question subset before final submission - proportionate for
   a parish course quiz, not exam-grade tamper-proof, and said so in the
   code itself rather than glossed over.
+- 🟡 **Hide/manage a single course, added 2026-11-28** - the project
+  owner's own ask: "Be able to hide, the Course for this page, like
+  manage this course if you are an admin." A new "Visible to the
+  public" switch on the course detail page, for anyone who can manage
+  that course's parish - a separate switch from the existing draft/
+  pending-review/published workflow above, so hiding a published
+  course doesn't send it back for review. Needed no `firestore.rules`
+  change (confirmed: the existing rule already lets any parish admin
+  change a course's non-status fields). Not yet tried live.
 
 ## Marketplace
 
@@ -469,7 +493,19 @@ by definition, regardless of what its own status says.
   (Browse -> a parish/church, Admin Panel, Account, Messages, and
   dozens more) still resets to that tab's own root on refresh, not the
   exact screen - a smaller, remaining version of the same limitation,
-  left for a future pass. **Needs `flutter pub get && flutter analyze`
-  run for real before trusting this** - this touches `app.dart` and
-  `home_screen.dart`, the two most central files in the app, and this
-  sandbox has no way to compile-check it itself.
+  left for a future pass. **Caught 2 real compile errors from this
+  pass via a pasted `flutter analyze` output** (a missing `go_router`
+  import, and an old test still using the renamed `onContinue`
+  parameter) - both fixed; everything else in that output was the
+  usual harmless deprecation noise. Still needs a real `flutter pub
+  get && flutter analyze` + a live test pass before fully trusting
+  this - a clean analyze only rules out compile errors, not whether
+  navigation actually behaves right on a real device.
+- 🟡 **"Every page needs a profile/messages/login-logout icon" - only
+  partly swept, added 2026-11-28.** Fixed the two screens the project
+  owner's own screenshots showed missing it (Course detail, Parish
+  detail) - not a full audit of every remaining screen in the app.
+  Earlier sweeps already covered 14+ screens sharing one exact header
+  shape (see PROJECT_STATUS.md); if it's still missing somewhere else,
+  that's a real, separate gap worth a full pass, not assumed fixed
+  everywhere just because it's fixed in a lot of places now.

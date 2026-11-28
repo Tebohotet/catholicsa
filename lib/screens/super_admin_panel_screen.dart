@@ -1836,20 +1836,40 @@ class _ProvinceManagementSectionState extends State<ProvinceManagementSection> {
         if (_loadingProvinces)
           const LinearProgressIndicator()
         else
-          ..._provincesForSelectedCountry.map((p) => ListTile(
-            contentPadding: EdgeInsets.zero,
-            title: Text(p['name'] ?? ''),
-            trailing: Row(mainAxisSize: MainAxisSize.min, children: [
-              IconButton(
-                icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.stone),
-                onPressed: () => _editProvince(p),
+          ..._provincesForSelectedCountry.map((p) {
+            // Same absent-means-visible convention as Parish/Church -
+            // added 2026-11-28 so a training/sandbox province (or any
+            // other not ready for the public) can be hidden from the
+            // public Browse list and every notice/prayer/course/media/
+            // listing rollup under it, without needing to delete it.
+            final isActive = (p['isActive'] as bool?) ?? true;
+            return ListTile(
+              contentPadding: EdgeInsets.zero,
+              title: Text(p['name'] ?? ''),
+              subtitle: Text(
+                isActive ? 'Visible in public Browse' : 'Hidden from public Browse - admins still see it',
+                style: const TextStyle(fontSize: 11, color: Colors.black45),
               ),
-              IconButton(
-                icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
-                onPressed: () => _deleteProvince(p['id']),
-              ),
-            ]),
-          )),
+              trailing: Row(mainAxisSize: MainAxisSize.min, children: [
+                IconButton(
+                  tooltip: isActive ? 'Hide from public Browse' : 'Show in public Browse',
+                  icon: Icon(isActive ? Icons.visibility_outlined : Icons.visibility_off_outlined, size: 18, color: AppColors.stone),
+                  onPressed: () async {
+                    await FirestoreService().setProvinceActive(p['id'], !isActive);
+                    await _loadProvinces();
+                  },
+                ),
+                IconButton(
+                  icon: const Icon(Icons.edit_outlined, size: 18, color: AppColors.stone),
+                  onPressed: () => _editProvince(p),
+                ),
+                IconButton(
+                  icon: const Icon(Icons.delete_outline, size: 18, color: Colors.redAccent),
+                  onPressed: () => _deleteProvince(p['id']),
+                ),
+              ]),
+            );
+          }),
         const SizedBox(height: 8),
         if (!_showAddProvinceForm)
           OutlinedButton.icon(
