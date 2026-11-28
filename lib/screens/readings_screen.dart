@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:go_router/go_router.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter/services.dart' show rootBundle;
 import 'dart:convert';
@@ -16,7 +17,6 @@ import '../widgets/profile_menu_button.dart';
 import '../utils/bible_citation_parser.dart';
 import '../utils/psalm_numbering.dart';
 import 'bible_screen.dart';
-import 'hymns_screen.dart';
 import 'super_admin_panel_screen.dart' show SaintsManagementSection;
 import '../widgets/super_admin_menu_widgets.dart';
 
@@ -228,7 +228,15 @@ class _ReadingsScreenState extends ConsumerState<ReadingsScreen> with RouteAware
                       IconButton(
                         tooltip: 'View Hymns',
                         icon: const Icon(Icons.library_music_outlined, color: Colors.white),
-                        onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const HymnsScreen())),
+                        // A real tab switch (go_router branch route), not a
+                        // Navigator.push - HymnsScreen is a bottom-nav tab
+                        // root with no back arrow of its own, so pushing a
+                        // second copy of it on top of Readings was a dead
+                        // end with no way back except the OS/browser back
+                        // gesture. Switching tabs instead needs no back
+                        // button at all - the bottom nav itself is how you
+                        // get back, exactly like tapping Readings again.
+                        onPressed: () => context.go('/hymns'),
                       ),
                       IconButton(
                         tooltip: 'Browse the Bible',

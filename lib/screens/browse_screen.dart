@@ -10,6 +10,8 @@ import 'diocese_detail_screen.dart';
 import 'province_detail_screen.dart';
 import 'search_screen.dart';
 import '../widgets/hierarchy_summary_sections.dart';
+import '../widgets/quick_nav_icons.dart';
+import '../widgets/profile_menu_button.dart';
 
 IconData _buildingIcon(String type) {
   switch (type) {
@@ -163,9 +165,24 @@ class _BrowseHierarchy extends StatelessWidget {
           children: [
             _StoneHeader(
               title: 'South Africa',
-              trailing: IconButton(
-                icon: const Icon(Icons.search, color: Colors.white),
-                onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+              // Same uniform-header icon set Readings/Hymns already have,
+              // plus this page's own existing search icon and a real
+              // embedded profile button - this tab root previously relied
+              // on HomeShell's floating profile button instead (fine on
+              // its own, but inconsistent with Readings/Hymns, which both
+              // embed it directly in their header for the same reason:
+              // see home_screen.dart's own index exclusion list, updated
+              // alongside this change).
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: [
+                  IconButton(
+                    icon: const Icon(Icons.search, color: Colors.white),
+                    onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
+                  ),
+                  const QuickNavIcons(),
+                  const ProfileMenuButton(embedded: true),
+                ],
               ),
             ),
             Padding(
@@ -240,7 +257,14 @@ class DioceseListScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _StoneHeader(title: provinceName, breadcrumb: const ['South Africa']),
+            _StoneHeader(
+              title: provinceName,
+              breadcrumb: const ['South Africa'],
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [QuickNavIcons(), ProfileMenuButton(embedded: true)],
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.all(16),
               child: CenteredContent(
@@ -291,7 +315,14 @@ class ParishListScreen extends StatelessWidget {
         child: Column(
           crossAxisAlignment: CrossAxisAlignment.start,
           children: [
-            _StoneHeader(title: dioceseName, breadcrumb: ['South Africa', provinceName]),
+            _StoneHeader(
+              title: dioceseName,
+              breadcrumb: ['South Africa', provinceName],
+              trailing: Row(
+                mainAxisSize: MainAxisSize.min,
+                children: const [QuickNavIcons(), ProfileMenuButton(embedded: true)],
+              ),
+            ),
             Padding(
               padding: const EdgeInsets.all(16),
               child: CenteredContent(

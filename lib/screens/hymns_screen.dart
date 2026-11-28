@@ -167,6 +167,21 @@ class _HymnsScreenState extends ConsumerState<HymnsScreen> with RouteAware {
                       icon: Icon(_editMode ? Icons.edit : Icons.edit_outlined, color: _editMode ? AppColors.brass : Colors.white),
                       onPressed: () => setState(() => _editMode = !_editMode),
                     ),
+                  // Same uniform-header ask as Readings' own "View Hymns"/
+                  // "Browse the Bible" icons, mirrored here for symmetry -
+                  // a real tab switch (go_router branch route), not a
+                  // Navigator.push, for the same reason Readings' own
+                  // "View Hymns" button was just fixed to do the same:
+                  // ReadingsScreen is a bottom-nav tab root with no back
+                  // arrow of its own, so pushing a second copy on top
+                  // would be a dead end with no way back. A distinct icon
+                  // from "Browse all hymns" below (also menu_book_outlined)
+                  // so the two don't look identical in the same header.
+                  IconButton(
+                    tooltip: 'View Readings',
+                    icon: const Icon(Icons.today_outlined, color: Colors.white),
+                    onPressed: () => context.go('/readings'),
+                  ),
                   FutureBuilder<List<Map<String, dynamic>>>(
                     future: _hymnsFuture,
                     builder: (context, snap) => IconButton(

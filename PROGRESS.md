@@ -389,6 +389,37 @@ by definition, regardless of what its own status says.
   oversight). Not yet tried live - worth breaking something on purpose
   and confirming it shows up in Super Admin -> Logs.
 
+## Navigation & Header Consistency
+
+- 🟡 **Every page now has the same Hymns/Bible/profile icon row Readings
+  already had, added 2026-11-28** - the project owner's own ask: "I need
+  the app to be uniform... make it uniform." Covers Browse's own root
+  page, Province, Diocese, Parish, Church, and Course pages. Not yet
+  tried live.
+- 🟡 **Real navigation dead end fixed: tapping "View Hymns" from
+  Readings used to push a second copy of the Hymns screen with no back
+  button at all** - found from the project owner's own question ("No
+  back button on Hymns to reading, or should we remove this?"). Now a
+  real tab switch instead, same as tapping the bottom nav directly - no
+  back button needed. Hymns' own header got a matching "View Readings"
+  icon. Not yet tried live.
+- 🟡 **Account/Messages no longer stick around after switching tabs and
+  back, added 2026-11-28** - the project owner's own bug report. Normal
+  in-page browsing depth (e.g. how far into Browse you'd drilled) is
+  untouched; only Account/Messages specifically get closed when you
+  switch away from that tab. Not yet tried live.
+- 🟡 **Map screen's three buttons now respond to real location
+  permission, added 2026-11-28** - granted hides "Use my location"
+  (nothing left to ask); denied hides "Hide map"/"Can I make it?" (both
+  need a real position to do anything) and leaves only "Use my
+  location" so you can still grant it later. Not yet tried live.
+- 🟡 **A first-run "look here" tip overlay, added 2026-11-28** - the
+  project owner's own ask for something like a short tooltip/onboarding
+  tour. Shows once per device, only on the Map screen so far, pointing
+  out its own three buttons. Not yet tried live - and deliberately not
+  extended to every other screen's new icons yet, a straightforward
+  follow-up with the same reusable piece if wanted.
+
 ## Platform Infrastructure
 
 - ✅ Server-driven UI / Custom Pages (block registry: text, spacer, share

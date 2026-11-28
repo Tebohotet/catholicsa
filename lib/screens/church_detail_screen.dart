@@ -11,6 +11,8 @@ import '../theme/app_theme.dart';
 import '../widgets/share_button.dart';
 import '../widgets/async_section.dart';
 import '../widgets/church_form_dialogs.dart';
+import '../widgets/profile_menu_button.dart';
+import '../widgets/quick_nav_icons.dart';
 import 'parish_detail_screen.dart';
 import 'admin_panel_screen.dart' show AdminPanelScreen;
 import 'course_list_screen.dart';
@@ -168,6 +170,9 @@ class _ChurchDetailScreenState extends State<ChurchDetailScreen> {
                                     ),
                                     const SizedBox(width: 4),
                                     Flexible(child: Text('Back to ${widget.backLabel}', style: const TextStyle(color: Colors.white70, fontSize: 12))),
+                                    const Spacer(),
+                                    const QuickNavIcons(),
+                                    const ProfileMenuButton(embedded: true),
                                   ],
                                 ),
                                 const SizedBox(height: 20),

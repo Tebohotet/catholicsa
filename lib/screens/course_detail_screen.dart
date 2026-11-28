@@ -9,6 +9,7 @@ import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
 import '../widgets/verified_name.dart';
 import '../widgets/profile_menu_button.dart';
+import '../widgets/quick_nav_icons.dart';
 import 'quiz_screen.dart';
 
 class CourseDetailScreen extends StatefulWidget {
@@ -233,6 +234,7 @@ class _CourseDetailScreenState extends State<CourseDetailScreen> {
                             ],
                           ),
                         ),
+                        const QuickNavIcons(),
                         const ProfileMenuButton(embedded: true),
                       ],
                     ),

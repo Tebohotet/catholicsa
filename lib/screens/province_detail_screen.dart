@@ -3,6 +3,8 @@ import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
 import '../widgets/hierarchy_summary_sections.dart';
+import '../widgets/profile_menu_button.dart';
+import '../widgets/quick_nav_icons.dart';
 import 'diocese_detail_screen.dart';
 
 /// Same concept one level up again - Province -> Dioceses, same four
@@ -44,11 +46,18 @@ class ProvinceDetailScreen extends StatelessWidget {
                         child: Column(
                           crossAxisAlignment: CrossAxisAlignment.start,
                           children: [
-                            IconButton(
-                              padding: EdgeInsets.zero,
-                              constraints: const BoxConstraints(),
-                              icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
-                              onPressed: () => Navigator.pop(context),
+                            Row(
+                              children: [
+                                IconButton(
+                                  padding: EdgeInsets.zero,
+                                  constraints: const BoxConstraints(),
+                                  icon: const Icon(Icons.arrow_back, color: Colors.white, size: 20),
+                                  onPressed: () => Navigator.pop(context),
+                                ),
+                                const Spacer(),
+                                const QuickNavIcons(),
+                                const ProfileMenuButton(embedded: true),
+                              ],
                             ),
                             const SizedBox(height: 16),
                             Container(

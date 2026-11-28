@@ -5,6 +5,8 @@ import '../services/firestore_service.dart';
 import '../theme/app_theme.dart';
 import '../widgets/profile_menu_button.dart';
 import '../services/hymn_player_service.dart';
+// accountRouteName / messagesRouteName live in profile_menu_button.dart -
+// see _closeProfileOverlays below for why.
 import '../app.dart';
 
 /// One real Navigator per bottom-nav tab - now built and owned by
@@ -144,11 +146,32 @@ class _HomeShellState extends State<HomeShell> {
     return true;
   }
 
+  // The project owner's own bug report: "when you click account while on
+  // a page, it stays there even when you went to another page you still
+  // see account or messages." Confirmed: each bottom-nav tab keeps its
+  // own Navigator stack when you switch away and back (by design -
+  // that's what lets Browse remember how deep you'd drilled into the
+  // Province->Diocese->Parish hierarchy) - but Account/Messages are a
+  // global utility reachable from every tab's own profile menu, not real
+  // content belonging to whichever tab happened to be open when you
+  // tapped it, so leaving them sitting there reads as stuck/broken rather
+  // than as the same kind of helpful memory Browse's own depth is. Pop
+  // them off specifically (by the names profile_menu_button.dart tags
+  // them with) the moment the bottom nav leaves that tab, leaving any
+  // other genuine in-tab navigation depth untouched.
+  void _closeProfileOverlays(int index) {
+    homeBranchNavigatorKeys[index].currentState?.popUntil(
+      (route) => route.settings.name != accountRouteName && route.settings.name != messagesRouteName,
+    );
+  }
+
   void _onTap(int i) {
+    final leavingIndex = widget.navigationShell.currentIndex;
+    if (i != leavingIndex) _closeProfileOverlays(leavingIndex);
     // initialLocation: true on the already-selected tab is go_router's
     // own documented way to reset that tab back to its own root - the
     // StatefulShellRoute equivalent of the old popUntil((r) => r.isFirst).
-    widget.navigationShell.goBranch(i, initialLocation: i == widget.navigationShell.currentIndex);
+    widget.navigationShell.goBranch(i, initialLocation: i == leavingIndex);
   }
 
   @override
@@ -179,13 +202,14 @@ class _HomeShellState extends State<HomeShell> {
               // itself instead of sitting on top of that screen's own
               // controls - see _atTabRoot above.
               //
-              // Also excluded on index 2 (Readings) and index 3 (Hymns)
-              // specifically - both tab roots have their own pencil/
-              // music/book icons in their own header; Readings and
-              // Hymns each embed the same ProfileMenuButton inline in
-              // their own header Row instead - see readings_screen.dart
-              // / hymns_screen.dart.
-              if (_atTabRoot && index != 2 && index != 3)
+              // Also excluded on index 1 (Browse), index 2 (Readings) and
+              // index 3 (Hymns) specifically - all three tab roots have
+              // their own icons in their own header now (uniform Hymns/
+              // Bible/profile icon row, see quick_nav_icons.dart); each
+              // embeds the same ProfileMenuButton inline in its own
+              // header Row instead - see browse_screen.dart /
+              // readings_screen.dart / hymns_screen.dart.
+              if (_atTabRoot && index != 1 && index != 2 && index != 3)
                 SafeArea(
                   child: Align(
                     alignment: Alignment.topRight,

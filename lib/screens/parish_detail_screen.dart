@@ -8,6 +8,7 @@ import '../theme/app_theme.dart';
 import '../widgets/async_section.dart';
 import '../widgets/church_form_dialogs.dart';
 import '../widgets/profile_menu_button.dart';
+import '../widgets/quick_nav_icons.dart';
 import 'church_detail_screen.dart';
 import '../widgets/hierarchy_summary_sections.dart';
 import 'search_screen.dart';
@@ -91,7 +92,7 @@ class _ParishDetailScreenState extends State<ParishDetailScreen> {
                                     builder: (_) => SearchScreen(scopeParishId: widget.parishId, scopeParishName: parish.name),
                                   )),
                                 ),
-                                const SizedBox(width: 4),
+                                const QuickNavIcons(),
                                 const ProfileMenuButton(embedded: true),
                               ],
                             ),

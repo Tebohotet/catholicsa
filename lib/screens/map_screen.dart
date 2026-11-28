@@ -11,6 +11,7 @@ import 'bible_screen.dart';
 import '../theme/app_theme.dart';
 import '../models/liturgical_day.dart';
 import '../providers/page_diagnostics_provider.dart';
+import '../widgets/first_run_tips.dart';
 import '../app.dart';
 
 const _brass = Color(0xFFA9822F);
@@ -73,11 +74,48 @@ class _MapScreenState extends State<MapScreen> with RouteAware {
   String? _selectedChurchId;
   String _statusMessage = '';
   bool _mapVisible = true;
+  // null = still checking/asking; true = granted (hide the "Use my
+  // location" button, nothing left to ask); false = denied (hide "Hide
+  // map"/"Can I make it?" - both need a real position to mean anything,
+  // so there's nothing useful behind them until permission is granted).
+  // The project owner's own ask: "When the site or app loads, the user
+  // is asked to use their location, if they agree, no need to show use
+  // location, only hide map and can I make it, if rejected, don't show
+  // the map and can I make up, only use my location."
+  bool? _locationGranted;
+
+  // First-run coach-mark targets - see first_run_tips.dart. Map is the
+  // very first real screen anyone lands on after onboarding, so it's
+  // the natural place to introduce these three buttons once.
+  final _useLocationKey = GlobalKey();
+  final _hideMapKey = GlobalKey();
+  final _canIMakeItKey = GlobalKey();
 
   @override
   void initState() {
     super.initState();
     _load();
+    _useMyLocation();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      showFirstRunTips(context, prefsKey: 'tips_map_v1', steps: [
+        TipStep(
+          targetKey: _useLocationKey,
+          title: 'Use my location',
+          message: 'Tap this once and the app shows real distance and travel time from wherever you are - the other two buttons below only do anything useful once this is allowed.',
+        ),
+        TipStep(
+          targetKey: _hideMapKey,
+          title: 'Hide map',
+          message: 'Hides the map itself if you just want the list of churches and times - tap again any time to bring it back.',
+        ),
+        TipStep(
+          targetKey: _canIMakeItKey,
+          title: 'Can I make it?',
+          message: "Checks every church's upcoming Mass against how long it'd take you to get there right now, so you know which ones you can still reach today.",
+        ),
+      ]);
+    });
     registerPageDiagnostics('Map', [
       TestCase('getAllChurches', () => FirestoreService().getAllChurches()),
       TestCase('getLiturgicalDay (for daily verse card)', () => FirestoreService().getLiturgicalDay(DateTime.now())),
@@ -336,6 +374,12 @@ class _MapScreenState extends State<MapScreen> with RouteAware {
   Future<void> _useMyLocation() async {
     setState(() => _statusMessage = 'Locating…');
     if (!await Geolocator.isLocationServiceEnabled()) {
+      // Services off at the OS level isn't the same thing as the app's
+      // own permission being denied - leave _locationGranted as-is (most
+      // likely still null on the very first load) rather than hiding the
+      // "Use my location" button for a state it can't actually fix by
+      // itself; tapping it again is still the right next step once the
+      // person turns location services back on.
       setState(() => _statusMessage = 'Location services are off on this device.');
       return;
     }
@@ -344,13 +388,17 @@ class _MapScreenState extends State<MapScreen> with RouteAware {
       permission = await Geolocator.requestPermission();
     }
     if (permission == LocationPermission.denied || permission == LocationPermission.deniedForever) {
-      setState(() => _statusMessage = 'Location permission denied — showing all churches without distance.');
+      setState(() {
+        _statusMessage = 'Location permission denied — showing all churches without distance.';
+        _locationGranted = false;
+      });
       return;
     }
     final pos = await Geolocator.getCurrentPosition();
     setState(() {
       _userPosition = pos;
       _statusMessage = 'Showing distance from your location.';
+      _locationGranted = true;
     });
     _mapController.move(LatLng(pos.latitude, pos.longitude), 10);
     await _refreshRoute();
@@ -423,42 +471,54 @@ class _MapScreenState extends State<MapScreen> with RouteAware {
                     spacing: 8,
                     runSpacing: 8,
                     children: [
-                      FilledButton.icon(
-                        style: FilledButton.styleFrom(backgroundColor: _brass, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), visualDensity: VisualDensity.compact),
-                        onPressed: _useMyLocation,
-                        icon: const Icon(Icons.my_location, size: 15),
-                        label: const Text('Use my location', style: TextStyle(fontSize: 12)),
-                      ),
-                      if (_mapVisible && _selectedChurchId != null)
-                        OutlinedButton.icon(
-                          style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), visualDensity: VisualDensity.compact),
-                          onPressed: _showAll,
-                          icon: const Icon(Icons.zoom_out_map, size: 15),
-                          label: const Text('Show all', style: TextStyle(fontSize: 12)),
+                      // Granted: nothing left to ask, so this button just
+                      // isn't shown. Denied: this is the only button shown
+                      // at all, so there's always a way to retry/grant
+                      // later. Still-checking (null, the instant right
+                      // after this screen opens): shown by default so the
+                      // row isn't empty for that first flash of a frame.
+                      if (_locationGranted != true)
+                        FilledButton.icon(
+                          key: _useLocationKey,
+                          style: FilledButton.styleFrom(backgroundColor: _brass, padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), visualDensity: VisualDensity.compact),
+                          onPressed: _useMyLocation,
+                          icon: const Icon(Icons.my_location, size: 15),
+                          label: const Text('Use my location', style: TextStyle(fontSize: 12)),
                         ),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), visualDensity: VisualDensity.compact),
-                        onPressed: () {
-                          setState(() => _mapVisible = !_mapVisible);
-                          _mapMessageHideTimer?.cancel();
-                          if (!_mapVisible) {
-                            setState(() => _showMapHiddenMessage = true);
-                            _mapMessageHideTimer = Timer(const Duration(seconds: 10), () {
-                              if (mounted) setState(() => _showMapHiddenMessage = false);
-                            });
-                          }
-                        },
-                        icon: Icon(_mapVisible ? Icons.map_outlined : Icons.map, size: 15),
-                        label: Text(_mapVisible ? 'Hide map' : 'Show map', style: const TextStyle(fontSize: 12)),
-                      ),
-                      OutlinedButton.icon(
-                        style: OutlinedButton.styleFrom(foregroundColor: _brass, side: const BorderSide(color: _brass, width: 1.5), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), visualDensity: VisualDensity.compact),
-                        onPressed: _checkingFeasibility ? null : _checkCanIStillMakeIt,
-                        icon: _checkingFeasibility
-                            ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: _brass))
-                            : const Icon(Icons.access_time_filled, size: 15),
-                        label: const Text('Can I make it?', style: TextStyle(fontSize: 12)),
-                      ),
+                      if (_locationGranted != false) ...[
+                        if (_mapVisible && _selectedChurchId != null)
+                          OutlinedButton.icon(
+                            style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), visualDensity: VisualDensity.compact),
+                            onPressed: _showAll,
+                            icon: const Icon(Icons.zoom_out_map, size: 15),
+                            label: const Text('Show all', style: TextStyle(fontSize: 12)),
+                          ),
+                        OutlinedButton.icon(
+                          key: _hideMapKey,
+                          style: OutlinedButton.styleFrom(foregroundColor: Colors.white, side: const BorderSide(color: Colors.white54), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), visualDensity: VisualDensity.compact),
+                          onPressed: () {
+                            setState(() => _mapVisible = !_mapVisible);
+                            _mapMessageHideTimer?.cancel();
+                            if (!_mapVisible) {
+                              setState(() => _showMapHiddenMessage = true);
+                              _mapMessageHideTimer = Timer(const Duration(seconds: 10), () {
+                                if (mounted) setState(() => _showMapHiddenMessage = false);
+                              });
+                            }
+                          },
+                          icon: Icon(_mapVisible ? Icons.map_outlined : Icons.map, size: 15),
+                          label: Text(_mapVisible ? 'Hide map' : 'Show map', style: const TextStyle(fontSize: 12)),
+                        ),
+                        OutlinedButton.icon(
+                          key: _canIMakeItKey,
+                          style: OutlinedButton.styleFrom(foregroundColor: _brass, side: const BorderSide(color: _brass, width: 1.5), padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 8), visualDensity: VisualDensity.compact),
+                          onPressed: _checkingFeasibility ? null : _checkCanIStillMakeIt,
+                          icon: _checkingFeasibility
+                              ? const SizedBox(width: 14, height: 14, child: CircularProgressIndicator(strokeWidth: 2, color: _brass))
+                              : const Icon(Icons.access_time_filled, size: 15),
+                          label: const Text('Can I make it?', style: TextStyle(fontSize: 12)),
+                        ),
+                      ],
                     ],
                   ),
                 ],

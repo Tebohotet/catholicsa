@@ -4,6 +4,13 @@ import '../screens/messaging/messages_inbox_screen.dart';
 import '../services/auth_service.dart';
 import '../theme/app_theme.dart';
 
+/// Shared with home_screen.dart's _onTap, which pops any route carrying
+/// one of these two names off a tab's own Navigator the instant the
+/// bottom nav switches away from it - see that file for the full bug
+/// this fixes.
+const accountRouteName = '/account';
+const messagesRouteName = '/messages';
+
 /// The small "My Profile / Messages / Log out" menu that replaced the old
 /// Account tab (see home_screen.dart). Pulled out to its own file - not
 /// left as a private class inside home_screen.dart - so it can also be
@@ -59,10 +66,15 @@ class ProfileMenuButton extends StatelessWidget {
     final nav = navigatorKey?.currentState ?? Navigator.of(context);
     switch (value) {
       case 'profile':
-        nav.push(MaterialPageRoute(builder: (_) => const AccountScreen()));
+        // Named so HomeShell's _onTap can find and pop these two
+        // specifically when the bottom nav switches tabs - see that
+        // file's own comment for the bug this fixes: "click account
+        // while on a page, it stays there even when you went to
+        // another page you still see account or messages."
+        nav.push(MaterialPageRoute(builder: (_) => const AccountScreen(), settings: const RouteSettings(name: accountRouteName)));
         break;
       case 'messages':
-        nav.push(MaterialPageRoute(builder: (_) => const MessagesInboxScreen()));
+        nav.push(MaterialPageRoute(builder: (_) => const MessagesInboxScreen(), settings: const RouteSettings(name: messagesRouteName)));
         break;
       case 'logout':
         _signOut(context);
