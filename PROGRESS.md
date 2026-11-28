@@ -247,15 +247,20 @@ by definition, regardless of what its own status says.
   buttons) with a real in-app viewer, with an "open externally"
   fallback if Syncfusion's own renderer can't load a given file.
   **Known, real, not-yet-fixed bug**: opening any PDF currently fails
-  with "Couldn't display this PDF here" - confirmed live, traced to the
-  Firebase Storage bucket having no CORS configuration at all (see
-  PROJECT_STATUS.md for the exact `gsutil cors set` command this
-  needs - a one-time fix only the project owner's own Google Cloud
-  login can run; nothing left for the bot to do here until that's run).
-  Everything else about the viewer itself (header, fallback button,
-  profile menu) is real and already deployed; this one external config
-  step is the only thing standing between it and actually displaying a
-  PDF.
+  with "Couldn't display this PDF here." The first CORS fix narrowed
+  this down but didn't close it - checked directly against the live
+  site, 2026-11-28: plain and ranged file fetches both now succeed
+  (CORS itself is no longer blocking), but the response is still
+  missing two specific headers (`Content-Range`, `Accept-Ranges`) the
+  PDF viewer needs to figure out how big the document is before it can
+  stream it. The `gsutil cors set` command already asks for both of
+  those correctly; what's unconfirmed is whether that command actually
+  finished last time (its own output got cut off mid-run) - see
+  PROJECT_STATUS.md for the exact command to re-run, and what to paste
+  back. Everything else about the viewer itself (header, fallback
+  button, profile menu) is real and already deployed; this one external
+  config step is the only thing standing between it and actually
+  displaying a PDF.
 - 🟡 **Persistent mini hymn-player bar**, added 2026-11-28 - a hymn now
   keeps playing, and stays controllable (play/pause, stop), on every
   screen in the app, not just the popup it was started from, including
@@ -412,13 +417,27 @@ by definition, regardless of what its own status says.
   permission, added 2026-11-28** - granted hides "Use my location"
   (nothing left to ask); denied hides "Hide map"/"Can I make it?" (both
   need a real position to do anything) and leaves only "Use my
-  location" so you can still grant it later. Not yet tried live.
+  location" so you can still grant it later. **Updated the same
+  day**: denying location now also hides the map area itself at the
+  bottom of the screen (it used to still show, just with its own
+  toggle button hidden) - the project owner's own words: "there is no
+  need to show the map at the bottom." Not yet tried live.
 - 🟡 **A first-run "look here" tip overlay, added 2026-11-28** - the
   project owner's own ask for something like a short tooltip/onboarding
   tour. Shows once per device, only on the Map screen so far, pointing
-  out its own three buttons. Not yet tried live - and deliberately not
-  extended to every other screen's new icons yet, a straightforward
-  follow-up with the same reusable piece if wanted.
+  out its own three buttons. **Updated the same day, two fixes from the
+  project owner's own screenshot**: (1) a timing bug where the tour
+  could show a message for "Use my location" while the highlight box
+  had already drifted onto a different, now-visible button - fixed by
+  waiting for the location-permission check to actually finish before
+  ever starting the tour, so it only ever points at something genuinely
+  on screen; (2) the message card itself made smaller ("does it have to
+  be that big?") - tighter text/padding/buttons, capped to a narrow
+  bubble near the button instead of a full-width banner. Not yet tried
+  live - and deliberately not extended to every other screen's new
+  icons yet (Account/Browse/Readings/Hymns), a straightforward follow-up
+  with the same reusable piece, now sized smaller by default, if
+  wanted.
 
 ## Platform Infrastructure
 
@@ -505,13 +524,16 @@ by definition, regardless of what its own status says.
   not added yet)
 - No search-as-you-type or fuzzy matching - exact substring only
 - No CI/CD - tests have to be run manually, nothing runs them on push
-- **Firebase Storage bucket has no CORS configuration**, found
-  2026-11-28 - blocks the new PDF viewer (and apparently at least one
-  other background fetch of raw audio bytes) from reading files
-  cross-origin on the web build. One `gsutil cors set` command fixes
-  it; needs the project owner's own Google Cloud login to run it (see
-  PROJECT_STATUS.md for the exact command) - nothing left here for the
-  bot to do until that's run.
+- **Firebase Storage bucket's CORS configuration is still incomplete**,
+  found 2026-11-28, re-checked live the same day after the project
+  owner ran the first fix - basic file reads now work, but the specific
+  `Content-Range`/`Accept-Ranges` response headers the PDF viewer needs
+  still aren't coming through, and a separate background audio fetch is
+  also still blocked. Same one `gsutil cors set` command as before
+  (already asks for the right headers) - needs the project owner's own
+  Google Cloud login to re-run it and let it fully finish this time (see
+  PROJECT_STATUS.md for the exact command and what to paste back) -
+  nothing left here for the bot to do until that's confirmed done.
 - 🟡 **No URL-synced routing - Phase 1 fixed, same night, not yet tried
   live.** Was: a browser refresh always reloaded the landing/About Us
   page instead of wherever you actually were. Flagged by the project

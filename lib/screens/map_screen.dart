@@ -95,15 +95,41 @@ class _MapScreenState extends State<MapScreen> with RouteAware {
   void initState() {
     super.initState();
     _load();
-    _useMyLocation();
-    WidgetsBinding.instance.addPostFrameCallback((_) {
+    // Tips used to be scheduled on the very first frame, before
+    // _useMyLocation()'s permission check had a chance to come back -
+    // that race is exactly what the project owner caught in a screenshot:
+    // the "Use my location" message showing while the highlight box had
+    // already jumped to wherever "Hide map"/"Can I make it" ended up once
+    // that button disappeared. Waiting for _useMyLocation() to actually
+    // settle first, then picking steps from the same _locationGranted
+    // value the build method itself uses, guarantees the tour only ever
+    // points at buttons that are genuinely on screen at that moment - the
+    // project owner's own words: "the information box should show for
+    // buttons that are visible not for hidden ones."
+    _useMyLocation().then((_) {
       if (!mounted) return;
-      showFirstRunTips(context, prefsKey: 'tips_map_v1', steps: [
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (!mounted) return;
+        _showMapTips();
+      });
+    });
+    registerPageDiagnostics('Map', [
+      TestCase('getAllChurches', () => FirestoreService().getAllChurches()),
+      TestCase('getLiturgicalDay (for daily verse card)', () => FirestoreService().getLiturgicalDay(DateTime.now())),
+    ]);
+  }
+
+  void _showMapTips() {
+    // Same conditions the Wrap below actually uses to decide what's on
+    // screen - never a step for a button this run of the tour won't show.
+    final steps = [
+      if (_locationGranted != true)
         TipStep(
           targetKey: _useLocationKey,
           title: 'Use my location',
-          message: 'Tap this once and the app shows real distance and travel time from wherever you are - the other two buttons below only do anything useful once this is allowed.',
+          message: 'Tap this once and the app shows real distance and travel time from wherever you are - the other two buttons only do anything useful once this is allowed.',
         ),
+      if (_locationGranted != false) ...[
         TipStep(
           targetKey: _hideMapKey,
           title: 'Hide map',
@@ -114,12 +140,10 @@ class _MapScreenState extends State<MapScreen> with RouteAware {
           title: 'Can I make it?',
           message: "Checks every church's upcoming Mass against how long it'd take you to get there right now, so you know which ones you can still reach today.",
         ),
-      ]);
-    });
-    registerPageDiagnostics('Map', [
-      TestCase('getAllChurches', () => FirestoreService().getAllChurches()),
-      TestCase('getLiturgicalDay (for daily verse card)', () => FirestoreService().getLiturgicalDay(DateTime.now())),
-    ]);
+      ],
+    ];
+    if (steps.isEmpty) return;
+    showFirstRunTips(context, prefsKey: 'tips_map_v1', steps: steps);
   }
 
   // Same reasoning, same pattern as hymns_screen.dart/readings_screen.dart:
@@ -282,6 +306,15 @@ class _MapScreenState extends State<MapScreen> with RouteAware {
 
   bool _showMapHiddenMessage = false;
   Timer? _mapMessageHideTimer;
+
+  // The project owner's own ask: "if the user didn't accept the location,
+  // there is no need to show the map at the bottom." _mapVisible alone
+  // used to control this, but that only tracks the manual "Hide map"
+  // toggle - which is itself hidden once permission is denied, so nothing
+  // could ever turn this back off for that case. Folding the permission
+  // state into the same check means a denial hides the map section
+  // outright, with no separate toggle needed.
+  bool get _mapSectionVisible => _mapVisible && _locationGranted != false;
 
   @override
   void dispose() {
@@ -624,7 +657,7 @@ class _MapScreenState extends State<MapScreen> with RouteAware {
             else if (_churches == null)
               const Expanded(child: Center(child: CircularProgressIndicator()))
             else ...[
-              if (_mapVisible)
+              if (_mapSectionVisible)
                 SizedBox(
                   height: 320,
                   child: Stack(
@@ -777,7 +810,7 @@ class _MapScreenState extends State<MapScreen> with RouteAware {
                   ],
                 ),
               )
-              else if (_showMapHiddenMessage)
+              else if (_showMapHiddenMessage && _locationGranted != false)
                 Container(
                   width: double.infinity,
                   color: _paperDark,

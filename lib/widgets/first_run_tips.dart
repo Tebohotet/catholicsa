@@ -87,10 +87,10 @@ class _TourRunner {
           // The actual highlighted box around the real widget, inset
           // slightly so the border doesn't sit flush on top of it.
           Positioned(
-            left: rect.left - 6,
-            top: rect.top - 6,
-            width: rect.width + 12,
-            height: rect.height + 12,
+            left: rect.left - 4,
+            top: rect.top - 4,
+            width: rect.width + 8,
+            height: rect.height + 8,
             child: IgnorePointer(
               child: DecoratedBox(
                 decoration: BoxDecoration(
@@ -100,38 +100,51 @@ class _TourRunner {
               ),
             ),
           ),
+          // Project owner's own ask: "does it have to be that big?" - kept
+          // as a small bubble near the button (capped width, tighter
+          // padding/type) rather than a banner stretching edge to edge.
           Positioned(
             left: 16,
             right: 16,
-            top: below ? rect.bottom + 12 : null,
-            bottom: below ? null : (screenSize.height - rect.top + 12),
-            child: Material(
-              color: AppColors.paper,
-              borderRadius: BorderRadius.circular(10),
-              elevation: 6,
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(
-                  crossAxisAlignment: CrossAxisAlignment.start,
-                  mainAxisSize: MainAxisSize.min,
-                  children: [
-                    Text(step.title, style: const TextStyle(fontFamily: appSerif, fontSize: 15, fontWeight: FontWeight.w600)),
-                    const SizedBox(height: 6),
-                    Text(step.message, style: const TextStyle(fontSize: 13)),
-                    const SizedBox(height: 10),
-                    Row(
-                      mainAxisAlignment: MainAxisAlignment.end,
+            top: below ? rect.bottom + 10 : null,
+            bottom: below ? null : (screenSize.height - rect.top + 10),
+            child: Align(
+              alignment: Alignment.centerLeft,
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 260),
+                child: Material(
+                  color: AppColors.paper,
+                  borderRadius: BorderRadius.circular(10),
+                  elevation: 6,
+                  child: Padding(
+                    padding: const EdgeInsets.all(10),
+                    child: Column(
+                      crossAxisAlignment: CrossAxisAlignment.start,
+                      mainAxisSize: MainAxisSize.min,
                       children: [
-                        TextButton(onPressed: _finish, child: const Text('Skip')),
-                        const SizedBox(width: 4),
-                        FilledButton(
-                          style: FilledButton.styleFrom(backgroundColor: AppColors.brass),
-                          onPressed: _next,
-                          child: Text(_index == steps.length - 1 ? 'Got it' : 'Next'),
+                        Text(step.title, style: const TextStyle(fontFamily: appSerif, fontSize: 13, fontWeight: FontWeight.w600)),
+                        const SizedBox(height: 3),
+                        Text(step.message, style: const TextStyle(fontSize: 11.5)),
+                        const SizedBox(height: 6),
+                        Row(
+                          mainAxisAlignment: MainAxisAlignment.end,
+                          children: [
+                            TextButton(
+                              style: TextButton.styleFrom(padding: const EdgeInsets.symmetric(horizontal: 8), minimumSize: const Size(0, 30)),
+                              onPressed: _finish,
+                              child: const Text('Skip', style: TextStyle(fontSize: 12)),
+                            ),
+                            const SizedBox(width: 2),
+                            FilledButton(
+                              style: FilledButton.styleFrom(backgroundColor: AppColors.brass, padding: const EdgeInsets.symmetric(horizontal: 10), minimumSize: const Size(0, 30)),
+                              onPressed: _next,
+                              child: Text(_index == steps.length - 1 ? 'Got it' : 'Next', style: const TextStyle(fontSize: 12)),
+                            ),
+                          ],
                         ),
                       ],
                     ),
-                  ],
+                  ),
                 ),
               ),
             ),
