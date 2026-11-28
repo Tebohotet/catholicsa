@@ -7,6 +7,7 @@ import 'super_admin_development_screen.dart';
 import 'super_admin_designer_screen.dart';
 import 'super_admin_directory_screen.dart';
 import 'super_admin_parishes_screen.dart';
+import 'logs_section.dart';
 import '../widgets/super_admin_menu_widgets.dart';
 import '../theme/app_theme.dart';
 import '../widgets/profile_menu_button.dart';
@@ -111,6 +112,16 @@ class SuperAdminHubScreen extends StatelessWidget {
                     onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminSectionHost(
                       title: 'Audit Log',
                       child: AuditLogSection(),
+                    ))),
+                  ),
+                  const SizedBox(height: 8),
+                  AdminMenuCard(
+                    icon: Icons.bug_report_outlined,
+                    title: 'Logs',
+                    subtitle: 'Every crash and error the app itself caught, signed in or not - the project owner\'s own "just go to the logs and see if all went well" ask.',
+                    onTap: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const AdminSectionHost(
+                      title: 'Logs',
+                      child: LogsSection(),
                     ))),
                   ),
                 ],

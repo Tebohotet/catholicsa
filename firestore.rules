@@ -217,6 +217,19 @@ service cloud.firestore {
       allow create: if isSignedIn() && request.resource.data.actorUid == request.auth.uid;
     }
 
+    // The project owner's "Logs" ask - a real, readable-after-the-fact
+    // record of crashes/errors (see lib/services/log_service.dart),
+    // separate from auditLogs above (which is admin actions, not errors).
+    // Deliberately open to create from EVERYONE, signed in or not - most
+    // of this app's real traffic is signed-out visitors just browsing
+    // Mass times, and missing their errors would defeat the point. Known
+    // tradeoff: nothing stops someone from writing junk here. Revisit
+    // with real rate-limiting if that's ever actually a problem.
+    match /appLogs/{logId} {
+      allow read, delete: if isSuperAdmin();
+      allow create: if true;
+    }
+
     // A growing, shared list of patronage tags - "Patron of travelers"
     // gets typed once, ever, then reused as a real option on every saint
     // after that, rather than retyped slightly differently each time.
