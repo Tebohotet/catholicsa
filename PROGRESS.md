@@ -246,21 +246,27 @@ by definition, regardless of what its own status says.
   original PDF" button, marketplace/donation "View Proof (PDF)"
   buttons) with a real in-app viewer, with an "open externally"
   fallback if Syncfusion's own renderer can't load a given file.
-  **Known, real, not-yet-fixed bug**: opening any PDF currently fails
-  with "Couldn't display this PDF here." The first CORS fix narrowed
-  this down but didn't close it - checked directly against the live
-  site, 2026-11-28: plain and ranged file fetches both now succeed
-  (CORS itself is no longer blocking), but the response is still
-  missing two specific headers (`Content-Range`, `Accept-Ranges`) the
-  PDF viewer needs to figure out how big the document is before it can
-  stream it. The `gsutil cors set` command already asks for both of
-  those correctly; what's unconfirmed is whether that command actually
-  finished last time (its own output got cut off mid-run) - see
-  PROJECT_STATUS.md for the exact command to re-run, and what to paste
-  back. Everything else about the viewer itself (header, fallback
-  button, profile menu) is real and already deployed; this one external
-  config step is the only thing standing between it and actually
-  displaying a PDF.
+  **The "Couldn't display this PDF here" bug is now actually root-caused
+  and fixed in code, 2026-11-28** - it took two passes to get all the
+  way there. The project owner's own CORS fix (`gsutil cors set`) really
+  did work; checking directly against the live site in this sandbox's
+  own browser confirmed plain and ranged file fetches both succeed with
+  it on. But one specific request still failed outright: a suffix
+  byte-range request ("the last 1024 bytes," exactly how a PDF reader
+  first looks for the file's trailer/xref table) - that one fails CORS
+  preflight no matter what, on the raw public GCS URL
+  (`storage.googleapis.com/<bucket>/<path>`) these hymn PDFs happen to
+  be stored under in Firestore, instead of a normal Firebase Storage
+  download URL. Tested Firebase's own `/v0/b/<bucket>/o/<path>?alt=media`
+  endpoint for the exact same file and it handles that same suffix range
+  correctly. Fixed in `pdf_viewer_screen.dart` by rewriting any raw GCS
+  URL to that form right before handing it to the viewer - no Firestore
+  data migration needed, and it's a no-op for a URL that's already in
+  the normal form. Confirmed the rewritten URL works end to end with a
+  direct test against the live file; what's **not yet confirmed** is the
+  in-app Syncfusion render itself, since that needs this code change
+  actually deployed first (see the corrected CI/CD note below - a normal
+  `git push` to `main` should be enough).
 - 🟡 **Persistent mini hymn-player bar**, added 2026-11-28 - a hymn now
   keeps playing, and stays controllable (play/pause, stop), on every
   screen in the app, not just the popup it was started from, including
@@ -523,17 +529,14 @@ by definition, regardless of what its own status says.
 - Video files open externally, not played in-app (`video_player` package
   not added yet)
 - No search-as-you-type or fuzzy matching - exact substring only
-- No CI/CD - tests have to be run manually, nothing runs them on push
-- **Firebase Storage bucket's CORS configuration is still incomplete**,
-  found 2026-11-28, re-checked live the same day after the project
-  owner ran the first fix - basic file reads now work, but the specific
-  `Content-Range`/`Accept-Ranges` response headers the PDF viewer needs
-  still aren't coming through, and a separate background audio fetch is
-  also still blocked. Same one `gsutil cors set` command as before
-  (already asks for the right headers) - needs the project owner's own
-  Google Cloud login to re-run it and let it fully finish this time (see
-  PROJECT_STATUS.md for the exact command and what to paste back) -
-  nothing left here for the bot to do until that's confirmed done.
+- ~~No CI/CD~~ **outdated, corrected 2026-11-28** - `.github/workflows/deploy.yml` already runs `flutter analyze`/`flutter test` on every push to `main`/`develop`, and auto-deploys the web build to Firebase Hosting (production or staging) if both pass. So pushing to `main` after this round's fixes should put them live on its own, no manual `flutter build web`/deploy step needed - just the usual `git push`.
+- ~~Firebase Storage bucket's CORS configuration is incomplete~~
+  **resolved 2026-11-28** - the project owner's `gsutil cors set` run
+  did finish and is confirmed working: re-tested every header the PDF
+  viewer and the hymn audio player need, directly against the live
+  bucket, and they're all there now. The PDF bug that remained after
+  this wasn't CORS at all - see the PDF viewer entry above for the real,
+  separate cause (a URL-format issue, now fixed in code).
 - 🟡 **No URL-synced routing - Phase 1 fixed, same night, not yet tried
   live.** Was: a browser refresh always reloaded the landing/About Us
   page instead of wherever you actually were. Flagged by the project

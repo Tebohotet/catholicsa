@@ -30,8 +30,35 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   String? _error;
   bool _ready = false;
 
+  // Some content (the bulk-imported hymn source PDFs in particular)
+  // stores a direct public GCS object URL
+  // (https://storage.googleapis.com/<bucket>/<path>) instead of a
+  // proper Firebase Storage download URL. Confirmed live, 2026-11-28,
+  // after the project owner's own CORS fix still left every PDF
+  // showing "Couldn't display this PDF here": a plain or positive-range
+  // fetch of that raw GCS URL works fine, but a suffix byte-range
+  // request ("bytes=-1024", i.e. "the last 1024 bytes") fails CORS
+  // preflight outright - and that's exactly the kind of request a PDF
+  // reader makes first, to read the file's trailer/xref table from the
+  // end before it knows how to fetch the rest. Firebase Storage's own
+  // `/v0/b/<bucket>/o/<path>?alt=media` endpoint was tested the same
+  // way and handles that same suffix range correctly. Rewriting to that
+  // form here, right before handing the URL to the PDF viewer, fixes
+  // every link already stored this way with no Firestore data
+  // migration needed - and costs nothing for a URL that's already in
+  // the normal form.
+  static final _rawGcsUrl = RegExp(r'^https://storage\.googleapis\.com/([^/]+)/(.+)$');
+
+  String _playableUrl(String url) {
+    final match = _rawGcsUrl.firstMatch(url);
+    if (match == null) return url;
+    final bucket = match.group(1)!;
+    final path = match.group(2)!;
+    return 'https://firebasestorage.googleapis.com/v0/b/$bucket/o/${Uri.encodeComponent(path)}?alt=media';
+  }
+
   Future<void> _openExternally() async {
-    final uri = Uri.parse(widget.url);
+    final uri = Uri.parse(_playableUrl(widget.url));
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open "${widget.title}".')));
@@ -80,7 +107,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
                   : Stack(
                       children: [
                         SfPdfViewer.network(
-                          widget.url,
+                          _playableUrl(widget.url),
                           controller: _controller,
                           onDocumentLoaded: (_) {
                             if (mounted) setState(() => _ready = true);
