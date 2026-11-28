@@ -1,4 +1,6 @@
+import 'dart:typed_data';
 import 'package:flutter/material.dart';
+import 'package:http/http.dart' as http;
 import 'package:syncfusion_flutter_pdfviewer/pdfviewer.dart';
 import 'package:url_launcher/url_launcher.dart';
 import '../theme/app_theme.dart';
@@ -29,6 +31,7 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
   final _controller = PdfViewerController();
   String? _error;
   bool _ready = false;
+  Uint8List? _bytes;
 
   // Some content (the bulk-imported hymn source PDFs in particular)
   // stores a direct public GCS object URL
@@ -62,6 +65,39 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
     final ok = await launchUrl(uri, mode: LaunchMode.externalApplication);
     if (!ok && mounted) {
       ScaffoldMessenger.of(context).showSnackBar(SnackBar(content: Text('Could not open "${widget.title}".')));
+    }
+  }
+
+  @override
+  void initState() {
+    super.initState();
+    _loadBytes();
+  }
+
+  // Confirmed live, 2026-11-28, after the two URL/CORS fixes above still
+  // left every PDF showing "Couldn't display this PDF here" with no
+  // console error at all: the browser's own network requests to the
+  // (by then correctly rewritten) URL were succeeding - no CORS error,
+  // right headers, right status codes - yet `SfPdfViewer.network()`
+  // still failed to render, silently. That matches Syncfusion's own
+  // published guidance for exactly this combination (Flutter Web + a
+  // Firebase Storage URL): their own "How to load a PDF from Firebase
+  // Storage" KB article doesn't use `.network()` at all for web - it
+  // fetches the bytes itself and renders with `SfPdfViewer.memory()`
+  // instead. Doing the same thing here: a plain `http.get` (no range
+  // requests at all, sidestepping whatever `.network()`'s own internal
+  // streaming does differently) followed by `.memory()`. These are small
+  // files (hymn sheet music, donation/marketplace proof-of-payment
+  // scans) so holding the whole thing in memory costs nothing.
+  Future<void> _loadBytes() async {
+    try {
+      final res = await http.get(Uri.parse(_playableUrl(widget.url)));
+      if (res.statusCode != 200) {
+        throw Exception('Server returned HTTP ${res.statusCode}');
+      }
+      if (mounted) setState(() => _bytes = res.bodyBytes);
+    } catch (e) {
+      if (mounted) setState(() => _error = e.toString());
     }
   }
 
@@ -104,21 +140,23 @@ class _PdfViewerScreenState extends State<PdfViewerScreen> {
             Expanded(
               child: _error != null
                   ? _buildError()
-                  : Stack(
-                      children: [
-                        SfPdfViewer.network(
-                          _playableUrl(widget.url),
-                          controller: _controller,
-                          onDocumentLoaded: (_) {
-                            if (mounted) setState(() => _ready = true);
-                          },
-                          onDocumentLoadFailed: (details) {
-                            if (mounted) setState(() => _error = details.description);
-                          },
+                  : _bytes == null
+                      ? const Center(child: CircularProgressIndicator())
+                      : Stack(
+                          children: [
+                            SfPdfViewer.memory(
+                              _bytes!,
+                              controller: _controller,
+                              onDocumentLoaded: (_) {
+                                if (mounted) setState(() => _ready = true);
+                              },
+                              onDocumentLoadFailed: (details) {
+                                if (mounted) setState(() => _error = details.description);
+                              },
+                            ),
+                            if (!_ready) const Center(child: CircularProgressIndicator()),
+                          ],
                         ),
-                        if (!_ready) const Center(child: CircularProgressIndicator()),
-                      ],
-                    ),
             ),
           ],
         ),

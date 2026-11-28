@@ -262,11 +262,24 @@ by definition, regardless of what its own status says.
   correctly. Fixed in `pdf_viewer_screen.dart` by rewriting any raw GCS
   URL to that form right before handing it to the viewer - no Firestore
   data migration needed, and it's a no-op for a URL that's already in
-  the normal form. Confirmed the rewritten URL works end to end with a
-  direct test against the live file; what's **not yet confirmed** is the
-  in-app Syncfusion render itself, since that needs this code change
-  actually deployed first (see the corrected CI/CD note below - a normal
-  `git push` to `main` should be enough).
+  the normal form.
+  **Update, same day, after that fix was pushed and deployed (Actions
+  confirmed green)**: the live PDF *still* failed, with zero console
+  errors - re-tested in a genuinely fresh browser tab and confirmed the
+  app really was now requesting the correct URL, no CORS issue, right
+  headers, yet Syncfusion's viewer silently refused to render it anyway.
+  That ruled out URL format and CORS both. Looked up Syncfusion's own
+  guidance for this exact combination (Flutter Web + Firebase Storage)
+  and found they don't use `SfPdfViewer.network()` for web at all in
+  their own sample - they fetch the bytes themselves and use
+  `SfPdfViewer.memory()` instead. Switched to that same approach here: a
+  plain `http.get()` (no range requests involved at all) followed by
+  `.memory()`. Every network-level precondition has now been tested and
+  confirmed working directly against the live file; what's **not yet
+  confirmed** is this specific fix's in-app render, since - same as
+  before - that needs this newest commit actually deployed first (a
+  normal `git push` to `main` is enough; see the corrected CI/CD note
+  below).
 - 🟡 **Persistent mini hymn-player bar**, added 2026-11-28 - a hymn now
   keeps playing, and stays controllable (play/pause, stop), on every
   screen in the app, not just the popup it was started from, including
