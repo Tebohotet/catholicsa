@@ -36,10 +36,15 @@ Future<void> main() async {
 
     FlutterError.onError = (details) {
       FlutterError.presentError(details); // still prints to the browser/IDE console as before
-      LogService.error(details.exceptionAsString(), source: 'FlutterError', stack: details.stack?.toString());
+      // LogService.error's own `stack` parameter is a real StackTrace?,
+      // not a String - it converts internally for storage (see
+      // log_service.dart). Pre-converting with .toString() here, like
+      // the first version of this file did, is a type mismatch flutter
+      // analyze correctly fails the build on.
+      LogService.error(details.exceptionAsString(), source: 'FlutterError', stack: details.stack);
     };
     PlatformDispatcher.instance.onError = (error, stack) {
-      LogService.error('Uncaught platform error', source: 'PlatformDispatcher', error: error, stack: stack.toString());
+      LogService.error('Uncaught platform error', source: 'PlatformDispatcher', error: error, stack: stack);
       return true; // tells Flutter this was handled, not that it's being ignored
     };
 
@@ -47,6 +52,6 @@ Future<void> main() async {
     // it's what makes ref.watch()/ref.read() work anywhere below it.
     runApp(const ProviderScope(child: CatholicSAApp()));
   }, (error, stack) {
-    LogService.error('Uncaught zone error', source: 'runZonedGuarded', error: error, stack: stack.toString());
+    LogService.error('Uncaught zone error', source: 'runZonedGuarded', error: error, stack: stack);
   });
 }
