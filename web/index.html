@@ -39,6 +39,29 @@
 </head>
 <body>
   <!--
+    Required by syncfusion_flutter_pdfviewer on the web platform: it renders
+    PDF pages through pdf.js in JS, not through Dart/WASM, so pdf.js has to
+    be loaded globally here - Syncfusion's own docs confirm this script tag
+    is a required manual step, not something the package adds for you.
+    Confirmed missing entirely from this file (root-caused 2026-11-28, after
+    three earlier PDF fixes - CORS headers, URL format, .memory() vs
+    .network() - all landed and still left every PDF showing "There was an
+    error opening this document." with no further detail, because the thing
+    that was actually missing was this script tag, not any of those three).
+
+    Pinned to pdf.js 2.11.338 on purpose, not the newer 4.x Syncfusion's docs
+    lead with: a still-open Syncfusion bug (flutter-widgets#2216) reports
+    that pdf.js builds above 2.16.105 throw "Invalid argument: Invalid array
+    length" specifically with SfPdfViewer.memory() - which is exactly what
+    this app's own pdf_viewer_screen.dart uses. 2.11.338 is Syncfusion's own
+    documented "below 4.0" example and predates that break.
+  -->
+  <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.min.js"></script>
+  <script type="text/javascript">
+    pdfjsLib.GlobalWorkerOptions.workerSrc = "https://cdnjs.cloudflare.com/ajax/libs/pdf.js/2.11.338/pdf.worker.min.js";
+  </script>
+
+  <!--
     You can customize the "flutter_bootstrap.js" script.
     This is useful to provide a custom configuration to the Flutter loader
     or to give the user feedback during the initialization process.

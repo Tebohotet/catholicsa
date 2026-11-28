@@ -280,6 +280,21 @@ by definition, regardless of what its own status says.
   before - that needs this newest commit actually deployed first (a
   normal `git push` to `main` is enough; see the corrected CI/CD note
   below).
+  **Update, same day, after THAT fix also deployed clean and the PDF
+  STILL failed with the exact same generic error and no console output**
+  (the project owner's own words: "Still where are my logs, lets see
+  where it fails?") - the real, final cause: Syncfusion's Flutter Web PDF
+  viewer doesn't parse PDFs itself at all, it renders every page through
+  Mozilla's `pdf.js`, which the app's own `web/index.html` has to load as
+  a plain `<script>` tag - and that tag was simply never there. So every
+  PDF was always going to fail, for every visitor, no matter what the
+  CORS/URL/`.memory()` fixes did (those were all still genuinely needed,
+  just not the whole story). Fixed by adding the required pdf.js script
+  tags to `web/index.html`, pinned to version 2.11.338 specifically
+  (there's a known, still-open bug in newer pdf.js versions that breaks
+  `SfPdfViewer.memory()` the exact way this app uses it). **Still not yet
+  confirmed live** - needs this pushed and deployed like every pass
+  before it.
 - 🟡 **Persistent mini hymn-player bar**, added 2026-11-28 - a hymn now
   keeps playing, and stays controllable (play/pause, stop), on every
   screen in the app, not just the popup it was started from, including
