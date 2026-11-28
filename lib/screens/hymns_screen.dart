@@ -6,6 +6,7 @@ import '../providers/view_as_role_provider.dart';
 import '../app.dart';
 import '../theme/app_theme.dart';
 import '../widgets/profile_menu_button.dart';
+import '../widgets/first_run_tips.dart';
 import '../services/hymn_player_service.dart';
 
 /// "Preview" here opens the PDF in the built-in PdfViewerScreen, so a
@@ -32,10 +33,35 @@ class _HymnsScreenState extends ConsumerState<HymnsScreen> with RouteAware {
   String _query = '';
   bool _editMode = false;
 
+  // First-run coach-mark targets - see first_run_tips.dart. Same pattern
+  // as map_screen.dart's own tour, extended here per the project owner's
+  // "Remove this carousel entirely" call (the small per-screen tours
+  // replace the old 4-slide onboarding carousel).
+  final _browseHymnsKey = GlobalKey();
+  final _viewReadingsKey = GlobalKey();
+
   @override
   void initState() {
     super.initState();
     _hymnsFuture = FirestoreService().getHymns();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showHymnsTips();
+    });
+  }
+
+  void _showHymnsTips() {
+    showFirstRunTips(context, prefsKey: 'tips_hymns_v1', steps: [
+      TipStep(
+        targetKey: _browseHymnsKey,
+        title: 'Browse all hymns',
+        message: 'Search the whole hymn list from here, instead of just the ones already on screen.',
+      ),
+      TipStep(
+        targetKey: _viewReadingsKey,
+        title: 'Readings',
+        message: "Jumps straight to the Readings tab - the same place the bottom nav bar takes you.",
+      ),
+    ]);
   }
 
   @override
@@ -178,6 +204,7 @@ class _HymnsScreenState extends ConsumerState<HymnsScreen> with RouteAware {
                   // from "Browse all hymns" below (also menu_book_outlined)
                   // so the two don't look identical in the same header.
                   IconButton(
+                    key: _viewReadingsKey,
                     tooltip: 'View Readings',
                     icon: const Icon(Icons.today_outlined, color: Colors.white),
                     onPressed: () => context.go('/readings'),
@@ -185,6 +212,7 @@ class _HymnsScreenState extends ConsumerState<HymnsScreen> with RouteAware {
                   FutureBuilder<List<Map<String, dynamic>>>(
                     future: _hymnsFuture,
                     builder: (context, snap) => IconButton(
+                      key: _browseHymnsKey,
                       tooltip: 'Browse all hymns',
                       icon: const Icon(Icons.menu_book_outlined, color: Colors.white),
                       onPressed: snap.data == null ? null : () => _showBrowsePicker(snap.data!),

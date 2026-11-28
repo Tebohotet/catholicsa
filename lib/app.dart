@@ -1,9 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:shared_preferences/shared_preferences.dart';
 import 'screens/home_screen.dart';
-import 'screens/onboarding_screen.dart';
 import 'screens/landing_screen.dart';
 import 'screens/map_screen.dart';
 import 'screens/browse_screen.dart';
@@ -32,11 +30,6 @@ final rootNavigatorKey = GlobalKey<NavigatorState>();
 /// exactly as before now that those Navigators are built by
 /// StatefulShellRoute instead of by hand.
 final rootRouteObserver = RouteObserver<ModalRoute<void>>();
-
-Future<bool> _hasSeenOnboarding() async {
-  final prefs = await SharedPreferences.getInstance();
-  return prefs.getBool('onboarding_seen') ?? false;
-}
 
 /// Real, URL-backed routing (go_router) - added 2026-11-28 to fix two
 /// real problems the project owner hit and reported the same night:
@@ -79,16 +72,19 @@ final GoRouter appRouter = GoRouter(
     // before too).
     GoRoute(
       path: '/',
-      builder: (context, state) => LandingScreen(
-        onContinue: () async {
-          final seen = await _hasSeenOnboarding();
-          if (context.mounted) context.go(seen ? '/map' : '/onboarding');
-        },
-      ),
-    ),
-    GoRoute(
-      path: '/onboarding',
-      builder: (context, state) => const OnboardingScreen(),
+      // 2026-11-28: the 4-slide onboarding carousel (OnboardingScreen,
+      // '/onboarding') is gone - the project owner's own call, after
+      // finding new visitors still saw it and it never actually pointed
+      // at the real Map/Browse/Readings/Hymns tabs ("why am I still
+      // seeing this when we have replaced it with the small ones, and
+      // why are they not pointing to map, browse, readings and hymns").
+      // Every visitor now goes straight from About Us into the app; the
+      // small first-run-tips coach-marks (first_run_tips.dart) - already
+      // on Map, now also added to Browse/Readings/Hymns - are the only
+      // "here's what this does" guidance left, each shown once on that
+      // screen's own first visit instead of four slides shown up front
+      // before anyone's even seen the app.
+      builder: (context, state) => LandingScreen(onContinue: () => context.go('/map')),
     ),
     // A church link in the starting URL / from a QR code, e.g.
     // catholicsa.co.za/church/<parishId>/<churchId> - the exact shape

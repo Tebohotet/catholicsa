@@ -456,22 +456,26 @@ by definition, regardless of what its own status says.
   bottom of the screen (it used to still show, just with its own
   toggle button hidden) - the project owner's own words: "there is no
   need to show the map at the bottom." Not yet tried live.
-- 🟡 **A first-run "look here" tip overlay, added 2026-11-28** - the
-  project owner's own ask for something like a short tooltip/onboarding
-  tour. Shows once per device, only on the Map screen so far, pointing
-  out its own three buttons. **Updated the same day, two fixes from the
-  project owner's own screenshot**: (1) a timing bug where the tour
-  could show a message for "Use my location" while the highlight box
-  had already drifted onto a different, now-visible button - fixed by
-  waiting for the location-permission check to actually finish before
-  ever starting the tour, so it only ever points at something genuinely
-  on screen; (2) the message card itself made smaller ("does it have to
-  be that big?") - tighter text/padding/buttons, capped to a narrow
-  bubble near the button instead of a full-width banner. Not yet tried
-  live - and deliberately not extended to every other screen's new
-  icons yet (Account/Browse/Readings/Hymns), a straightforward follow-up
-  with the same reusable piece, now sized smaller by default, if
-  wanted.
+- 🟡 **A first-run "look here" tip overlay, added 2026-11-28, now the
+  app's only onboarding mechanism.** The project owner's own ask for
+  something like a short tooltip/onboarding tour. Shows once per device,
+  originally only on the Map screen, pointing out its own three buttons.
+  **Updated the same day, two fixes from the project owner's own
+  screenshot**: (1) a timing bug where the tour could show a message for
+  "Use my location" while the highlight box had already drifted onto a
+  different, now-visible button - fixed by waiting for the
+  location-permission check to actually finish before ever starting the
+  tour, so it only ever points at something genuinely on screen; (2) the
+  message card itself made smaller ("does it have to be that big?") -
+  tighter text/padding/buttons, capped to a narrow bubble near the
+  button instead of a full-width banner. **Extended the same night to
+  Browse, Readings, and Hymns too**, after the project owner asked why
+  the old 4-slide onboarding carousel was still showing and had it
+  removed entirely (see the Onboarding entry below) - Browse now
+  highlights its Search icon and the Map/Readings/Hymns quick-jump
+  icons; Readings highlights "Jump to a date" and the "View Hymns" icon;
+  Hymns highlights "Browse all hymns" and the "View Readings" icon.
+  None of the four tours tried live yet.
 
 ## Platform Infrastructure
 
@@ -516,12 +520,18 @@ by definition, regardless of what its own status says.
   the app currently wraps a screen in `FeatureGate` yet, which is
   expected for infrastructure built in advance of the feature it'll
   eventually gate, not a gap to close now.
-- ✅ Onboarding (4 slides, shown once per device via `shared_preferences`).
-  Single call site for `setBool('onboarding_seen', true)`, correctly
-  placed inside `_finish()` alongside a `pushReplacement` so the back
-  button can't return to onboarding after completion. Read side
-  (`app.dart`) correctly defaults to `false` or unset - boolean logic
-  checked precisely rather than assumed correct.
+- ~~Onboarding (4 slides, shown once per device via
+  `shared_preferences`)~~ **removed entirely, 2026-11-28** - the project
+  owner noticed new visitors were still seeing it and that it never
+  actually pointed at the real Map/Browse/Readings/Hymns tabs ("why am I
+  still seeing this when we have replaced it with the small ones, and
+  why are they not pointing to map, browse, readings and hymns"), and
+  asked for it gone: "Remove this carousel entirely." `app.dart`'s `/`
+  route now goes straight to `/map`, no onboarding check at all; the
+  `OnboardingScreen` file is left in place (unreachable, retired, marked
+  as such in its own header comment) rather than deleted, in case any of
+  its slide content is wanted again. The first-run-tips coach-marks
+  above are now the app's only "here's what this does" guidance.
 - ✅ Privacy Policy screen - genuine draft content, explicitly **not**
   legally reviewed, says so in the app itself. Confirmed the actual
   disclaimer text is present and honest ("DRAFT... has not been

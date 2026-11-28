@@ -12,6 +12,7 @@ import 'search_screen.dart';
 import '../widgets/hierarchy_summary_sections.dart';
 import '../widgets/quick_nav_icons.dart';
 import '../widgets/profile_menu_button.dart';
+import '../widgets/first_run_tips.dart';
 
 IconData _buildingIcon(String type) {
   switch (type) {
@@ -187,12 +188,48 @@ class _BrowseHierarchy extends StatelessWidget {
   }
 }
 
-class _BrowseHierarchyBody extends StatelessWidget {
+class _BrowseHierarchyBody extends StatefulWidget {
   final bool isAdmin;
   const _BrowseHierarchyBody({required this.isAdmin});
 
   @override
+  State<_BrowseHierarchyBody> createState() => _BrowseHierarchyBodyState();
+}
+
+class _BrowseHierarchyBodyState extends State<_BrowseHierarchyBody> {
+  // First-run coach-mark targets - see first_run_tips.dart. Same pattern
+  // as map_screen.dart's own tour, extended here per the project owner's
+  // "Remove this carousel entirely" call (the small per-screen tours
+  // replace the old 4-slide onboarding carousel).
+  final _searchKey = GlobalKey();
+  final _quickNavKey = GlobalKey();
+
+  @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showBrowseTips();
+    });
+  }
+
+  void _showBrowseTips() {
+    showFirstRunTips(context, prefsKey: 'tips_browse_v1', steps: [
+      TipStep(
+        targetKey: _searchKey,
+        title: 'Search',
+        message: 'Search for a parish, church, notice, or anything else in the directory from here.',
+      ),
+      TipStep(
+        targetKey: _quickNavKey,
+        title: 'Quick jumps',
+        message: 'Shortcuts straight to Map, Readings, and Hymns, without going back to the bottom nav bar.',
+      ),
+    ]);
+  }
+
+  @override
   Widget build(BuildContext context) {
+    final isAdmin = widget.isAdmin;
     return Scaffold(
       backgroundColor: AppColors.paper,
       body: SingleChildScrollView(
@@ -213,10 +250,11 @@ class _BrowseHierarchyBody extends StatelessWidget {
                 mainAxisSize: MainAxisSize.min,
                 children: [
                   IconButton(
+                    key: _searchKey,
                     icon: const Icon(Icons.search, color: Colors.white),
                     onPressed: () => Navigator.push(context, MaterialPageRoute(builder: (_) => const SearchScreen())),
                   ),
-                  const QuickNavIcons(),
+                  QuickNavIcons(key: _quickNavKey),
                   const ProfileMenuButton(embedded: true),
                 ],
               ),

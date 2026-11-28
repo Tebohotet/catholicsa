@@ -1,3 +1,20 @@
+// RETIRED 2026-11-28 - no longer used anywhere in the app.
+//
+// This 4-slide carousel used to show on every visitor's first visit,
+// reached via app.dart's old '/onboarding' route. The project owner
+// found new visitors were still seeing it, and that it never actually
+// pointed at the real Map/Browse/Readings/Hymns tabs it was describing -
+// his own words: "why am I still seeing this when we have replaced it
+// with the small ones, and why are they not pointing to map, browse,
+// readings and hymns." His call, verbatim: "Remove this carousel
+// entirely." app.dart's '/' route now goes straight to '/map' with no
+// onboarding check at all, and first_run_tips.dart's small coach-mark
+// overlay (already on Map, now also added to Browse/Readings/Hymns) is
+// the only "here's what this does" guidance left.
+//
+// Left in place rather than deleted, in case any of this slide content
+// or layout is wanted again later - nothing in the app imports or
+// builds it anymore, so it has no effect either way.
 import 'package:flutter/material.dart';
 import 'package:go_router/go_router.dart';
 import 'package:shared_preferences/shared_preferences.dart';

@@ -14,10 +14,11 @@ void main() {
     });
 
     // LandingScreen itself stopped deciding what comes next once real
-    // routing (go_router) landed - that's app.dart's job now (checking
-    // onboarding state, then going to '/onboarding' or '/map'). This
-    // screen's only remaining job is to call onContinue - tested here as
-    // exactly that, not by checking what widget shows up afterward.
+    // routing (go_router) landed - that's app.dart's job now (just
+    // going to '/map' unconditionally, since the old '/onboarding'
+    // carousel was removed 2026-11-28). This screen's only remaining
+    // job is to call onContinue - tested here as exactly that, not by
+    // checking what widget shows up afterward.
     testWidgets('Continue calls onContinue', (tester) async {
       var called = false;
       await tester.pumpWidget(MaterialApp(

@@ -14,6 +14,7 @@ import '../providers/view_as_role_provider.dart';
 import '../widgets/share_button.dart';
 import '../widgets/app_calendar.dart';
 import '../widgets/profile_menu_button.dart';
+import '../widgets/first_run_tips.dart';
 import '../utils/bible_citation_parser.dart';
 import '../utils/psalm_numbering.dart';
 import 'bible_screen.dart';
@@ -31,6 +32,13 @@ class _ReadingsScreenState extends ConsumerState<ReadingsScreen> with RouteAware
   DateTime _selectedDate = DateTime.now();
   late Future<LiturgicalDay?> _future;
   bool _editMode = false;
+
+  // First-run coach-mark targets - see first_run_tips.dart. Same pattern
+  // as map_screen.dart's own tour, extended here per the project owner's
+  // "Remove this carousel entirely" call (the small per-screen tours
+  // replace the old 4-slide onboarding carousel).
+  final _calendarKey = GlobalKey();
+  final _viewHymnsKey = GlobalKey();
 
   @override
   void didChangeDependencies() {
@@ -59,9 +67,27 @@ class _ReadingsScreenState extends ConsumerState<ReadingsScreen> with RouteAware
     super.initState();
     _load();
     _loadManifestIfNeeded();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (mounted) _showReadingsTips();
+    });
     registerPageDiagnostics('Readings', [
       TestCase('getLiturgicalDay (selected date)', () => FirestoreService().getLiturgicalDay(_selectedDate)),
       TestCase('getFeastForDate (selected date)', () => FirestoreService().getFeastForDate(_selectedDate)),
+    ]);
+  }
+
+  void _showReadingsTips() {
+    showFirstRunTips(context, prefsKey: 'tips_readings_v1', steps: [
+      TipStep(
+        targetKey: _calendarKey,
+        title: 'Jump to a date',
+        message: 'Tap this to pick any day on the calendar instead of stepping through one day at a time with the arrows.',
+      ),
+      TipStep(
+        targetKey: _viewHymnsKey,
+        title: 'Hymns',
+        message: 'Jumps straight to the Hymns tab - the same place the bottom nav bar takes you.',
+      ),
     ]);
   }
 
@@ -226,6 +252,7 @@ class _ReadingsScreenState extends ConsumerState<ReadingsScreen> with RouteAware
                         },
                       ),
                       IconButton(
+                        key: _viewHymnsKey,
                         tooltip: 'View Hymns',
                         icon: const Icon(Icons.library_music_outlined, color: Colors.white),
                         // A real tab switch (go_router branch route), not a
@@ -277,6 +304,7 @@ class _ReadingsScreenState extends ConsumerState<ReadingsScreen> with RouteAware
                         onPressed: () => _changeDay(1),
                       ),
                       IconButton(
+                        key: _calendarKey,
                         icon: const Icon(Icons.calendar_month, color: Colors.white, size: 20),
                         tooltip: 'Jump to a date',
                         onPressed: () => showDialog(
